@@ -1,0 +1,238 @@
+const API_BASE_URL = 'http://localhost:5000/api';
+
+class ApiService {
+  private baseURL: string;
+
+  constructor(baseURL: string = API_BASE_URL) {
+    this.baseURL = baseURL;
+  }
+
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<T> {
+    const url = `${this.baseURL}${endpoint}`;
+    const config: RequestInit = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    };
+
+    // Add auth token if available
+    const token = localStorage.getItem('nutriwise-token');
+    if (token) {
+      config.headers = {
+        ...config.headers,
+        Authorization: `Bearer ${token}`,
+      };
+    }
+
+    try {
+      const response = await fetch(url, config);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('API request failed:', error);
+      throw error;
+    }
+  }
+
+  // Auth endpoints
+  async register(userData: {
+    username: string;
+    email: string;
+    password: string;
+    confirmPassword: string;
+  }) {
+    return this.request<{ message: string; userId: number; token: string }>(
+      '/auth/register',
+      {
+        method: 'POST',
+        body: JSON.stringify(userData),
+      }
+    );
+  }
+
+  async login(credentials: { email: string; password: string }) {
+    return this.request<{ message: string; userId: number; token: string }>(
+      '/auth/login',
+      {
+        method: 'POST',
+        body: JSON.stringify(credentials),
+      }
+    );
+  }
+
+  async logout() {
+    return this.request<{ message: string }>('/auth/logout', {
+      method: 'POST',
+    });
+  }
+
+  // Profile endpoints
+  async getUserProfile() {
+    return this.request('/profile/me');
+  }
+
+  async createOrUpdateProfile(profileData: any) {
+    return this.request('/profile/create', {
+      method: 'POST',
+      body: JSON.stringify(profileData),
+    });
+  }
+
+  async updateProfile(profileData: any) {
+    return this.request('/profile/update', {
+      method: 'PUT',
+      body: JSON.stringify(profileData),
+    });
+  }
+
+  async calculateBMI(data: { weight: number; height: number }) {
+    return this.request('/profile/calculate-bmi', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Foods endpoints
+  async getAllFoods(params?: {
+    category?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    const queryParams = params ? new URLSearchParams(params as any).toString() : '';
+    return this.request(`/foods${queryParams ? `?${queryParams}` : ''}`);
+  }
+
+  async getFoodById(id: number) {
+    return this.request(`/foods/${id}`);
+  }
+
+  async searchFoods(query: string) {
+    return this.request(`/foods/search?query=${encodeURIComponent(query)}`);
+  }
+
+  async getFoodCategories() {
+    return this.request('/foods/categories');
+  }
+
+  async getFoodNutrition(id: number) {
+    return this.request(`/foods/nutrition/${id}`);
+  }
+
+  // Meal plans endpoints
+  async createMealPlan(planData: {
+    name: string;
+    startDate: string;
+    endDate: string;
+    type: string;
+    totalCalories: number;
+    budget: number;
+  }) {
+    return this.request('/meal-plans/create', {
+      method: 'POST',
+      body: JSON.stringify(planData),
+    });
+  }
+
+  async getUserMealPlans() {
+    return this.request('/meal-plans');
+  }
+
+  async getMealPlanById(id: number) {
+    return this.request(`/meal-plans/${id}`);
+  }
+
+  async addMealToPlan(planId: number, mealData: {
+    foodId: number;
+    mealType: string;
+    dayOfWeek: number;
+    servingSize: number;
+    unit: string;
+  }) {
+    return this.request(`/meal-plans/${planId}/add-meal`, {
+      method: 'POST',
+      body: JSON.stringify(mealData),
+    });
+  }
+
+  // Food logs endpoints
+  async logFood(logData: {
+    foodId: number;
+    date: string;
+    mealType: string;
+    servingSize: number;
+    unit: string;
+  }) {
+    return this.request('/food-logs/log', {
+      method: 'POST',
+      body: JSON.stringify(logData),
+    });
+  }
+
+  async getFoodLogs(date?: string) {
+    const query = date ? `?date=${date}` : '';
+    return this.request(`/food-logs${query}`);
+  }
+
+  async getDailyNutrition(date?: string) {
+    const query = date ? `?date=${date}` : '';
+    return this.request(`/food-logs/daily-nutrition${query}`);
+  }
+
+  async getNutritionTrends(days: number = 7) {
+    return this.request(`/food-logs/trends?days=${days}`);
+  }
+
+  // Saved foods endpoints
+  async saveFoodToFavorites(foodId: number) {
+    return this.request('/saved-foods/save', {
+      method: 'POST',
+      body: JSON.stringify({ foodId }),
+    });
+  }
+
+  async getSavedFoods() {
+    return this.request('/saved-foods');
+  }
+
+  async removeSavedFood(foodId: number) {
+    return this.request(`/saved-foods/${foodId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async isFoodSaved(foodId: number) {
+    return this.request(`/saved-foods/check/${foodId}`);
+  }
+
+  // Dashboard endpoints
+  async getDashboardData() {
+    return this.request('/dashboard');
+  }
+
+  async getWeeklyStats() {
+    return this.request('/dashboard/weekly-stats');
+  }
+
+  async getHealthMetrics() {
+    return this.request('/dashboard/health-metrics');
+  }
+
+  // Health check
+  async healthCheck() {
+    return this.request('/health');
+  }
+}
+
+export const apiService = new ApiService();
+export default apiService;
