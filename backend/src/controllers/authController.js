@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import db from '../config/database.js';
 
 export const register = async (req, res) => {
-  const { username, email, password } = req.body;
+  const { username, email, password, role = 'user' } = req.body;
 
   try {
     // Normalize email (trim and lowercase)
@@ -25,14 +25,14 @@ export const register = async (req, res) => {
 
       // Insert new user
       db.run(
-        'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
-        [normalizedUsername, normalizedEmail, hashedPassword],
+        'INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)',
+        [normalizedUsername, normalizedEmail, hashedPassword, role],
         function(err) {
           if (err) {
             return res.status(500).json({ error: 'Failed to create user' });
           }
 
-          const token = jwt.sign({ userId: this.lastID }, process.env.JWT_SECRET || 'secret', {
+          const token = jwt.sign({ userId: this.lastID, role }, process.env.JWT_SECRET || 'secret', {
             expiresIn: '7d',
           });
 
@@ -40,6 +40,7 @@ export const register = async (req, res) => {
             message: 'User registered successfully',
             userId: this.lastID,
             token,
+            role,
           });
         }
       );
@@ -71,7 +72,7 @@ export const login = async (req, res) => {
         return res.status(401).json({ error: 'Incorrect password' });
       }
 
-      const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET || 'secret', {
+      const token = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET || 'secret', {
         expiresIn: '7d',
       });
 
@@ -79,6 +80,7 @@ export const login = async (req, res) => {
         message: 'Login successful',
         userId: user.id,
         token,
+        role: user.role,
         username: user.username,
       });
     });

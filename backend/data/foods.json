@@ -318,7 +318,7 @@
     "prepTime": "0 mins",
     "healthBenefits": "Calcium rich, strong bones",
     "source": "USDA"
-  }
+  },
 {
   "metadata": {
     "version": "2.0",
@@ -7144,7 +7144,8 @@
       "created_at": "2026-04-21T06:00:00.000000+00:00"
     }
   ],
-  "meal_plan_templates": [
+  "meal_plan_templates": 
+  [
     {
       "id": "256f3fc8-5a47-4e97-9cf9-be98817811e9",
       "name": "Diabetic-Friendly Day Plan",
@@ -8471,3 +8472,5 @@
     }
   ]
 }
+]
+

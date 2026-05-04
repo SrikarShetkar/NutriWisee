@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useLocation } from 'react-router';
 import { ChefHat, Mail, Lock, User, Eye, EyeOff, ArrowRight, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '../components/ui/button';
@@ -10,8 +10,9 @@ import { useAuth } from '../../contexts/AuthContext';
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, register } = useAuth();
-  const [isLogin, setIsLogin] = useState(true);
+  const isLogin = location.pathname !== '/signup';
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -22,38 +23,74 @@ export function LoginPage() {
     confirmPassword: '',
   });
 
+  const handleFieldChange = (field: keyof typeof formData, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    setError('');
+  };
+
+  const validateEmail = (email: string) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  const validateLoginForm = () => {
+    if (!formData.email.trim() || !formData.password) {
+      return 'Please enter your email and password.';
+    }
+    if (!validateEmail(formData.email)) {
+      return 'Please enter a valid email address.';
+    }
+    return null;
+  };
+
+  const validateRegistrationForm = () => {
+    if (!formData.name.trim()) {
+      return 'Please enter your full name.';
+    }
+    if (!formData.email.trim() || !formData.password || !formData.confirmPassword) {
+      return 'Please fill in all required fields.';
+    }
+    if (!validateEmail(formData.email)) {
+      return 'Please enter a valid email address.';
+    }
+    if (formData.password !== formData.confirmPassword) {
+      return 'Passwords do not match.';
+    }
+    if (formData.password.length < 6) {
+      return 'Password must be at least 6 characters long.';
+    }
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    const validationError = isLogin
+      ? validateLoginForm()
+      : validateRegistrationForm();
+
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     setIsLoading(true);
 
     try {
       if (isLogin) {
-        // Login
-        await login(formData.email, formData.password);
-        navigate('/dashboard');
+        await login(formData.email.trim(), formData.password);
+        navigate('/dashboard', { replace: true });
       } else {
-        // Register
-        if (formData.password !== formData.confirmPassword) {
-          setError('Passwords do not match!');
-          return;
-        }
-        if (formData.password.length < 6) {
-          setError('Password must be at least 6 characters long!');
-          return;
-        }
-
         await register({
-          username: formData.name || formData.email.split('@')[0],
-          email: formData.email,
+          username: formData.name.trim() || formData.email.split('@')[0],
+          email: formData.email.trim(),
           password: formData.password,
           confirmPassword: formData.confirmPassword,
         });
 
-        navigate('/profile');
+        navigate('/profile', { replace: true });
       }
     } catch (error: any) {
-      setError(error.message || 'An error occurred');
+      setError(error?.message || 'An error occurred while signing in.');
     } finally {
       setIsLoading(false);
     }
@@ -177,7 +214,7 @@ export function LoginPage() {
                       <Input
                         type="text"
                         value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        onChange={(e) => handleFieldChange('name', e.target.value)}
                         className="pl-10"
                         placeholder="Enter your full name"
                         required={!isLogin}
@@ -195,7 +232,7 @@ export function LoginPage() {
                     <Input
                       type="email"
                       value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      onChange={(e) => handleFieldChange('email', e.target.value)}
                       className="pl-10"
                       placeholder="student@college.edu"
                       required
@@ -212,7 +249,7 @@ export function LoginPage() {
                     <Input
                       type={showPassword ? 'text' : 'password'}
                       value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      onChange={(e) => handleFieldChange('password', e.target.value)}
                       className="pl-10 pr-10"
                       placeholder="••••••••"
                       required
@@ -237,9 +274,7 @@ export function LoginPage() {
                       <Input
                         type={showPassword ? 'text' : 'password'}
                         value={formData.confirmPassword}
-                        onChange={(e) =>
-                          setFormData({ ...formData, confirmPassword: e.target.value })
-                        }
+                        onChange={(e) => handleFieldChange('confirmPassword', e.target.value)}
                         className="pl-10"
                         placeholder="••••••••"
                         required={!isLogin}
@@ -292,48 +327,8 @@ export function LoginPage() {
                     <div className="w-full border-t border-gray-300"></div>
                   </div>
                   <div className="relative flex justify-center text-sm">
-                    <span className="px-4 bg-white text-gray-500">or continue with</span>
+                    <span className="px-4 bg-white text-gray-500">Secure login with your credentials</span>
                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="py-6"
-                    onClick={() => alert('Google login coming soon!')}
-                  >
-                    <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
-                      <path
-                        fill="currentColor"
-                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                      />
-                      <path
-                        fill="currentColor"
-                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                      />
-                      <path
-                        fill="currentColor"
-                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                      />
-                      <path
-                        fill="currentColor"
-                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                      />
-                    </svg>
-                    Google
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="py-6"
-                    onClick={() => alert('Facebook login coming soon!')}
-                  >
-                    <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                    </svg>
-                    Facebook
-                  </Button>
                 </div>
               </form>
 
@@ -341,7 +336,7 @@ export function LoginPage() {
                 <p className="text-gray-600">
                   {isLogin ? "Don't have an account?" : 'Already have an account?'}{' '}
                   <button
-                    onClick={() => setIsLogin(!isLogin)}
+                    onClick={() => navigate(isLogin ? '/signup' : '/login')}
                     className="text-green-600 hover:text-green-700 font-semibold"
                   >
                     {isLogin ? 'Sign Up' : 'Sign In'}

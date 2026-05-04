@@ -1,7 +1,7 @@
 import db from '../config/database.js';
 
 export const logFood = (req, res) => {
-  const { userId } = req;
+  const { userId } = req.user;
   const { foodId, date, mealType, servingSize, unit } = req.body;
 
   // Get food details for nutritional info
@@ -41,7 +41,7 @@ export const logFood = (req, res) => {
 };
 
 export const getFoodLog = (req, res) => {
-  const { userId } = req;
+  const { userId } = req.user;
   const { date } = req.query;
 
   let query = 'SELECT fl.*, f.name FROM food_logs fl JOIN foods f ON fl.foodId = f.id WHERE fl.userId = ?';
@@ -64,7 +64,7 @@ export const getFoodLog = (req, res) => {
 };
 
 export const getDailyNutrition = (req, res) => {
-  const { userId } = req;
+  const { userId } = req.user;
   const { date } = req.query;
 
   const queryDate = date || new Date().toISOString().split('T')[0];
@@ -93,7 +93,7 @@ export const getDailyNutrition = (req, res) => {
 
 export const deleteFoodLog = (req, res) => {
   const { logId } = req.params;
-  const { userId } = req;
+  const { userId } = req.user;
 
   db.run('DELETE FROM food_logs WHERE id = ? AND userId = ?', [logId, userId], function(err) {
     if (err) {
@@ -105,7 +105,7 @@ export const deleteFoodLog = (req, res) => {
 };
 
 export const getNutritionTrends = (req, res) => {
-  const { userId } = req;
+  const { userId } = req.user;
   const { days = 7 } = req.query;
 
   const query = `

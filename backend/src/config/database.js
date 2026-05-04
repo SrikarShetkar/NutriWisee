@@ -1,3 +1,4 @@
+import bcrypt from 'bcryptjs';
 import sqlite3 from 'sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -25,6 +26,7 @@ function initializeDatabase() {
         username TEXT UNIQUE NOT NULL,
         email TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
+        role TEXT DEFAULT 'user',
         createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
         updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
       )
@@ -84,7 +86,58 @@ function initializeDatabase() {
       )
     `);
 
-    // 5. Meal plans table
+    // Seed a default admin account if none exists
+    db.get("SELECT COUNT(*) AS count FROM users WHERE role = 'admin'", async (err, row) => {
+      if (err) {
+        console.error('Failed to check admin account:', err);
+        return;
+      }
+
+      const adminCount = row?.count || 0;
+      if (adminCount === 0) {
+        const hashedPassword = await bcrypt.hash(process.env.DEFAULT_ADMIN_PASSWORD || 'Admin@123', 10);
+        const adminEmail = process.env.DEFAULT_ADMIN_EMAIL || 'admin@nutriwise.com';
+        const adminUsername = process.env.DEFAULT_ADMIN_USERNAME || 'nutriadmin';
+
+        db.run(
+          'INSERT OR IGNORE INTO users (username, email, password, role) VALUES (?, ?, ?, ?)',
+          [adminUsername, adminEmail, hashedPassword, 'admin'],
+          function (insertErr) {
+            if (insertErr) {
+              console.error('Failed to seed default admin user:', insertErr);
+            } else {
+              console.log(`Created default admin account: ${adminEmail}`);
+            }
+          }
+        );
+      }
+    });
+
+    // 5. Recipes table (admin-managed)
+    db.run(`
+      CREATE TABLE IF NOT EXISTS recipes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        category TEXT DEFAULT 'Main Course',
+        cost REAL DEFAULT 0,
+        time INTEGER DEFAULT 30,
+        calories INTEGER DEFAULT 300,
+        protein REAL DEFAULT 10,
+        difficulty TEXT DEFAULT 'Easy',
+        ingredients TEXT DEFAULT '[]',
+        steps TEXT DEFAULT '[]',
+        tips TEXT DEFAULT '[]',
+        image TEXT DEFAULT '',
+        videoLink TEXT DEFAULT '',
+        videoChannel TEXT DEFAULT '',
+        createdBy INTEGER,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (createdBy) REFERENCES users(id)
+      )
+    `);
+
+    // 5b. Meal plans table
     db.run(`
       CREATE TABLE IF NOT EXISTS meal_plans (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

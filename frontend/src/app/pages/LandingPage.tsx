@@ -63,14 +63,14 @@ export function LandingPage() {
                   to="/login"
                   className="inline-flex items-center justify-center px-8 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:shadow-xl transition-all group"
                 >
-                  Get Started
+                  Login
                   <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Link>
                 <Link
-                  to="/dashboard"
+                  to="/signup"
                   className="inline-flex items-center justify-center px-8 py-4 bg-white border-2 border-green-500 text-green-600 rounded-xl hover:bg-green-50 transition-all"
                 >
-                  View Demo
+                  Sign Up
                 </Link>
               </div>
             </motion.div>

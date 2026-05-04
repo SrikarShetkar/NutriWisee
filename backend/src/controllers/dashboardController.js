@@ -1,7 +1,7 @@
 import db from '../config/database.js';
 
 export const getDashboardData = (req, res) => {
-  const { userId } = req;
+  const { userId } = req.user;
   const today = new Date().toISOString().split('T')[0];
 
   Promise.all([
@@ -70,7 +70,7 @@ export const getDashboardData = (req, res) => {
 };
 
 export const getWeeklyStats = (req, res) => {
-  const { userId } = req;
+  const { userId } = req.user;
 
   db.all(
     `
@@ -98,7 +98,7 @@ export const getWeeklyStats = (req, res) => {
 };
 
 export const getHealthMetrics = (req, res) => {
-  const { userId } = req;
+  const { userId } = req.user;
 
   db.get('SELECT * FROM user_profiles WHERE userId = ?', [userId], (err, profile) => {
     if (err) {

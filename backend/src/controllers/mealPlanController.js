@@ -1,7 +1,7 @@
 import db from '../config/database.js';
 
 export const createMealPlan = (req, res) => {
-  const { userId } = req;
+  const { userId } = req.user;
   const { name, startDate, endDate, type, totalCalories, budget } = req.body;
 
   db.run(
@@ -21,7 +21,7 @@ export const createMealPlan = (req, res) => {
 };
 
 export const getUserMealPlans = (req, res) => {
-  const { userId } = req;
+  const { userId } = req.user;
 
   db.all('SELECT * FROM meal_plans WHERE userId = ? ORDER BY createdAt DESC', [userId], (err, plans) => {
     if (err) {
@@ -34,7 +34,7 @@ export const getUserMealPlans = (req, res) => {
 
 export const getMealPlanById = (req, res) => {
   const { id } = req.params;
-  const { userId } = req;
+  const { userId } = req.user;
 
   db.get('SELECT * FROM meal_plans WHERE id = ? AND userId = ?', [id, userId], (err, plan) => {
     if (err) {
@@ -95,7 +95,7 @@ export const removeMealFromPlan = (req, res) => {
 
 export const deleteMealPlan = (req, res) => {
   const { id } = req.params;
-  const { userId } = req;
+  const { userId } = req.user;
 
   db.run('DELETE FROM meal_plans WHERE id = ? AND userId = ?', [id, userId], function(err) {
     if (err) {

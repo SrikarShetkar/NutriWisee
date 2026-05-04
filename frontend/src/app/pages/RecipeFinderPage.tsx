@@ -1,13 +1,38 @@
 import { useState, useEffect } from 'react';
-import { Search, Clock, DollarSign, Flame, ChefHat, Filter, Play, X, User } from 'lucide-react';
+import { Search, Clock, DollarSign, Flame, ChefHat, Filter, Play, X, User, Heart } from 'lucide-react';
+import { apiService } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
+
+type Recipe = {
+  id: number;
+  backendId?: number;
+  name: string;
+  category: string;
+  cost: number;
+  time: number;
+  calories: number;
+  protein: number;
+  difficulty: string;
+  ingredients: string[];
+  detailedSteps: string[];
+  tips: string[];
+  image: string;
+  videoLink: string;
+  videoChannel: string;
+};
 
 export function RecipeFinderPage() {
   const [searchType, setSearchType] = useState<'ingredients' | 'budget'>('ingredients');
   const [searchQuery, setSearchQuery] = useState('');
   const [budgetFilter, setBudgetFilter] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedRecipe, setSelectedRecipe] = useState<typeof recipes[0] | null>(null);
+  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
+  const [dynamicRecipes, setDynamicRecipes] = useState<Recipe[]>([]);
+  const [savedRecipeKeys, setSavedRecipeKeys] = useState<Set<string>>(new Set());
+  const [isLoadingRecipes, setIsLoadingRecipes] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [userName, setUserName] = useState('');
+  const { user } = useAuth();
 
   useEffect(() => {
     const userData = localStorage.getItem('nutriwise-user');
@@ -388,11 +413,409 @@ export function RecipeFinderPage() {
       videoLink: 'https://www.youtube.com/watch?v=RAYAHFukLxQ',
       videoChannel: 'Hebbars Kitchen',
     },
+    // ── Non-Veg Recipes ──────────────────────────────────────
+    {
+      id: 13,
+      name: 'Butter Chicken',
+      category: 'Non-Veg',
+      cost: 120,
+      time: 45,
+      calories: 480,
+      protein: 32,
+      difficulty: 'Medium',
+      ingredients: ['Chicken', 'Butter', 'Cream', 'Tomatoes', 'Onion', 'Ginger-Garlic Paste', 'Kashmiri Chili', 'Garam Masala', 'Kasuri Methi'],
+      detailedSteps: [
+        'Marinate 500g chicken in yogurt, red chili, garam masala, ginger-garlic paste for 30 min',
+        'Grill or pan-fry marinated chicken until cooked and slightly charred',
+        'Heat 2 tbsp butter in a pan, sauté onions until golden',
+        'Add ginger-garlic paste, cook 2 min. Add chopped tomatoes, cook until mushy',
+        'Add Kashmiri chili powder, coriander powder, salt. Cook 5 min',
+        'Blend the sauce smooth. Return to pan',
+        'Add grilled chicken pieces, pour in 1/2 cup cream',
+        'Add 1 tsp kasuri methi (crushed). Simmer 10 min',
+        'Finish with 1 tbsp butter. Serve with naan or rice'
+      ],
+      tips: ['Use Kashmiri chili for vibrant colour without too much heat', 'Rest marinated chicken overnight for deeper flavour', 'Kasuri methi is the secret to restaurant taste'],
+      image: 'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=a03U45jFxOI',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 14,
+      name: 'Chicken Curry',
+      category: 'Non-Veg',
+      cost: 90,
+      time: 40,
+      calories: 380,
+      protein: 28,
+      difficulty: 'Medium',
+      ingredients: ['Chicken', 'Onions', 'Tomatoes', 'Ginger-Garlic Paste', 'Coriander Powder', 'Turmeric', 'Red Chili Powder', 'Garam Masala', 'Oil'],
+      detailedSteps: [
+        'Heat oil in a heavy pot. Add whole spices (bay leaf, cloves, cardamom)',
+        'Add finely chopped onions, fry until deep golden brown — this is key',
+        'Add ginger-garlic paste, fry 2 minutes until raw smell disappears',
+        'Add chopped tomatoes. Cook until oil separates (10 min)',
+        'Add turmeric, red chili, coriander powder, salt. Mix well',
+        'Add chicken pieces, coat in masala. Sear on high heat 5 min',
+        'Add 1 cup water, bring to boil. Cover and cook 20 min on medium',
+        'Check chicken is cooked through. Add garam masala',
+        'Garnish with fresh coriander. Serve with rice or roti'
+      ],
+      tips: ['Brown the onions deeply — this builds the base flavour', 'Adding whole spices at the start gives a more aromatic curry', 'Bone-in chicken gives more flavour than boneless'],
+      image: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=7JEBrZHFZS4',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 15,
+      name: 'Fish Fry',
+      category: 'Non-Veg',
+      cost: 80,
+      time: 25,
+      calories: 320,
+      protein: 30,
+      difficulty: 'Easy',
+      ingredients: ['Fish Fillets', 'Red Chili Powder', 'Turmeric', 'Lemon Juice', 'Ginger-Garlic Paste', 'Curry Leaves', 'Oil', 'Rice Flour'],
+      detailedSteps: [
+        'Clean and pat dry 4 fish fillets (surmai, pomfret, or rohu)',
+        'Make marinade: red chili powder, turmeric, ginger-garlic paste, lemon juice, salt, rice flour',
+        'Coat fish fillets evenly in marinade. Rest 15 minutes',
+        'Heat oil in a wide pan on medium-high heat',
+        'Place fish carefully, add curry leaves alongside',
+        'Fry 4-5 minutes each side without disturbing until golden and crispy',
+        'Drain on paper towel',
+        'Serve hot with lemon wedges and onion rings'
+      ],
+      tips: ['Pat fish completely dry before marinating', 'Rice flour gives extra crispiness', 'Don\'t flip too early — wait until it releases naturally'],
+      image: 'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=6I7EMXL6g0M',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 16,
+      name: 'Egg Curry',
+      category: 'Non-Veg',
+      cost: 40,
+      time: 25,
+      calories: 290,
+      protein: 16,
+      difficulty: 'Easy',
+      ingredients: ['Boiled Eggs', 'Onions', 'Tomatoes', 'Ginger-Garlic Paste', 'Coconut Milk', 'Turmeric', 'Red Chili Powder', 'Garam Masala'],
+      detailedSteps: [
+        'Hard boil 4 eggs, peel and make 3-4 slits on each egg',
+        'Shallow fry eggs in oil with a pinch of turmeric until golden. Set aside',
+        'In same pan, add onions, fry until golden',
+        'Add ginger-garlic paste, cook 2 min',
+        'Add tomatoes, cook until soft and oil separates',
+        'Add turmeric, chili powder, coriander powder, salt. Cook 3 min',
+        'Pour in 1 cup coconut milk (or water), bring to simmer',
+        'Add fried eggs, simmer 5 minutes until gravy thickens',
+        'Finish with garam masala and fresh coriander'
+      ],
+      tips: ['Pricking the eggs lets the masala absorb inside', 'Light frying the eggs before adding to curry adds great texture', 'Coconut milk makes it rich and creamy'],
+      image: 'https://images.unsplash.com/photo-1565557623262-b51c2513a641?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=V83SFkfIJFg',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 17,
+      name: 'Mutton Biryani',
+      category: 'Non-Veg',
+      cost: 150,
+      time: 90,
+      calories: 580,
+      protein: 38,
+      difficulty: 'Hard',
+      ingredients: ['Basmati Rice', 'Mutton', 'Fried Onions', 'Yogurt', 'Saffron', 'Whole Spices', 'Mint', 'Ghee', 'Biryani Masala'],
+      detailedSteps: [
+        'Marinate mutton in yogurt, biryani masala, ginger-garlic paste, fried onions overnight',
+        'Soak basmati rice 30 min, par-boil with whole spices until 70% done',
+        'Cook marinated mutton in heavy pot until tender (30 min pressure cooker)',
+        'Layer: mutton masala at bottom, then rice, saffron milk, fried onions, mint, ghee',
+        'Seal pot with dough or foil. Cook on dum: high 5 min, then low 25 min',
+        'Rest 10 min before opening',
+        'Mix gently from the bottom and serve with raita'
+      ],
+      tips: ['Long marination is essential for tender mutton', 'Dum cooking on a tawa/griddle prevents burning', 'Use aged basmati rice for best results'],
+      image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=e5SRBzYhGnA',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 18,
+      name: 'Keema Pav',
+      category: 'Non-Veg',
+      cost: 70,
+      time: 30,
+      calories: 420,
+      protein: 26,
+      difficulty: 'Easy',
+      ingredients: ['Minced Mutton / Chicken', 'Onions', 'Tomatoes', 'Peas', 'Pav Bread', 'Ginger-Garlic Paste', 'Keema Masala', 'Butter'],
+      detailedSteps: [
+        'Heat oil, add onions fry until golden',
+        'Add ginger-garlic paste, cook 2 min',
+        'Add minced meat (keema), cook on high heat breaking lumps — 10 min',
+        'Add tomatoes, cook until oil separates',
+        'Add keema masala, turmeric, red chili powder, salt',
+        'Add peas and 1/4 cup water. Simmer covered 10 min',
+        'Garnish with lemon juice and coriander',
+        'Toast pav with butter on a tawa. Serve keema with pav'
+      ],
+      tips: ['Cook keema on high heat first to remove excess moisture', 'Add a squeeze of lemon at the end for freshness', 'Leftover keema makes great sandwiches'],
+      image: 'https://images.unsplash.com/photo-1606491956689-2ea866880c84?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=RYZV3L1Evng',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 19,
+      name: 'Prawn Masala',
+      category: 'Non-Veg',
+      cost: 130,
+      time: 25,
+      calories: 300,
+      protein: 28,
+      difficulty: 'Medium',
+      ingredients: ['Prawns', 'Onions', 'Tomatoes', 'Coconut', 'Ginger-Garlic Paste', 'Red Chili', 'Turmeric', 'Curry Leaves', 'Oil'],
+      detailedSteps: [
+        'Clean and devein 300g prawns. Marinate with turmeric and salt for 10 min',
+        'Dry roast coconut until golden. Grind with red chilies and a little water',
+        'Heat oil, add curry leaves, then onions. Fry until golden',
+        'Add ginger-garlic paste, cook 2 min',
+        'Add tomatoes, cook until soft. Add coconut-chili paste',
+        'Cook masala 5 min until oil surfaces',
+        'Add prawns, cook 5-6 min — don\'t overcook or they become rubbery',
+        'Adjust salt, garnish with coriander. Serve with rice'
+      ],
+      tips: ['Prawns cook fast — remove from heat the moment they curl into a C-shape', 'Fresh coconut makes the masala richer', 'Deveining is important for a clean taste'],
+      image: 'https://images.unsplash.com/photo-1565557623262-b51c2513a641?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=6rG1n4fkpnM',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 20,
+      name: 'Chicken Biryani',
+      category: 'Non-Veg',
+      cost: 100,
+      time: 60,
+      calories: 520,
+      protein: 34,
+      difficulty: 'Medium',
+      ingredients: ['Basmati Rice', 'Chicken', 'Yogurt', 'Fried Onions', 'Mint', 'Saffron', 'Ghee', 'Biryani Masala', 'Whole Spices'],
+      detailedSteps: [
+        'Marinate chicken in yogurt, biryani masala, ginger-garlic paste, fried onions, lemon — 1 hr',
+        'Soak basmati rice 30 min. Par-boil with whole spices until 70% cooked',
+        'Cook marinated chicken in pot until 80% done (15-20 min)',
+        'Layer rice over chicken. Add saffron milk, mint, fried onions, ghee',
+        'Cover tightly with foil and lid. Cook on dum: high 5 min then low 20 min',
+        'Rest 10 min. Open gently and mix from the edges',
+        'Serve with raita, boiled egg, and salan'
+      ],
+      tips: ['Par-cooking rice only 70% ensures it finishes perfectly in the dum', 'Fresh mint and saffron are what make biryani special', 'Tawa/griddle under the pot prevents burning on dum'],
+      image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=FlQlBFBqhN4',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 21,
+      name: 'Tandoori Chicken',
+      category: 'Non-Veg',
+      cost: 110,
+      time: 50,
+      calories: 340,
+      protein: 36,
+      difficulty: 'Medium',
+      ingredients: ['Chicken Legs / Whole Chicken', 'Hung Curd', 'Kashmiri Chili', 'Ginger-Garlic Paste', 'Tandoori Masala', 'Lemon', 'Mustard Oil', 'Charcoal'],
+      detailedSteps: [
+        'Make deep cuts in chicken pieces for marinade to penetrate',
+        'First marinate: lemon juice, salt, chili powder — 20 min',
+        'Second marinade: hung curd, tandoori masala, ginger-garlic paste, mustard oil — mix well',
+        'Coat chicken thoroughly. Marinate minimum 4 hours (overnight is best)',
+        'Preheat oven to 220°C or prepare grill',
+        'Place chicken on wire rack. Bake/grill 25-30 min, turning halfway',
+        'For smoky tandoor flavour: place hot charcoal in foil cup inside pot, drizzle oil, cover 5 min',
+        'Serve with onion rings, lemon, and mint chutney'
+      ],
+      tips: ['Mustard oil in marinade gives authentic tandoor flavour', 'The charcoal smoking trick is magic', 'Don\'t skip overnight marination for bone-in chicken'],
+      image: 'https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=gfp-KhFqvLs',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 22,
+      name: 'Fish Curry',
+      category: 'Non-Veg',
+      cost: 90,
+      time: 30,
+      calories: 310,
+      protein: 26,
+      difficulty: 'Easy',
+      ingredients: ['Fish', 'Coconut Milk', 'Tamarind', 'Onions', 'Tomatoes', 'Mustard Seeds', 'Curry Leaves', 'Red Chili', 'Turmeric'],
+      detailedSteps: [
+        'Marinate fish with turmeric and salt, rest 10 min',
+        'Heat oil, add mustard seeds until they splutter. Add curry leaves',
+        'Add sliced onions, fry until translucent',
+        'Add ginger-garlic paste, cook 2 min',
+        'Add tomatoes and cook until mushy',
+        'Add red chili powder, coriander powder, turmeric. Cook 3 min',
+        'Pour coconut milk and tamarind extract. Bring to gentle simmer',
+        'Add fish pieces, cook 8-10 min on medium. Don\'t stir too much',
+        'Season and serve with steamed rice'
+      ],
+      tips: ['Simmer gently — vigorous boiling breaks delicate fish', 'Tamarind balances the richness of coconut milk', 'Kerala-style: use kokum instead of tamarind'],
+      image: 'https://images.unsplash.com/photo-1603133872878-684f208fb84b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=9LCWOaLJxPg',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 23,
+      name: 'Chicken Tikka Masala',
+      category: 'Non-Veg',
+      cost: 115,
+      time: 40,
+      calories: 450,
+      protein: 33,
+      difficulty: 'Medium',
+      ingredients: ['Chicken Breast', 'Hung Curd', 'Onions', 'Tomatoes', 'Cream', 'Cashews', 'Tikka Masala', 'Kasuri Methi', 'Butter'],
+      detailedSteps: [
+        'Marinate boneless chicken in hung curd, tikka masala, lemon, ginger-garlic paste — 2 hrs',
+        'Grill or pan-fry marinated chicken until lightly charred. Set aside',
+        'Blend cooked onions, tomatoes, and cashews into smooth paste',
+        'Heat butter in pan, add the blended paste. Cook 8-10 min stirring',
+        'Add tikka masala, red chili, salt. Cook until oil separates',
+        'Add grilled chicken tikka pieces',
+        'Pour cream, add crushed kasuri methi. Simmer 5 min',
+        'Adjust seasoning. Serve with naan and sliced onions'
+      ],
+      tips: ['Cashews in the gravy make it silky smooth', 'Charring the chicken before adding to curry is essential', 'This tastes even better the next day'],
+      image: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=a03U45jFxOI',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 24,
+      name: 'Omelette',
+      category: 'Breakfast',
+      cost: 20,
+      time: 10,
+      calories: 220,
+      protein: 14,
+      difficulty: 'Very Easy',
+      ingredients: ['Eggs', 'Onion', 'Tomato', 'Green Chili', 'Coriander', 'Salt', 'Pepper', 'Oil / Butter'],
+      detailedSteps: [
+        'Beat 2-3 eggs with salt, pepper, and a splash of water',
+        'Finely chop onion, tomato, green chili, and coriander',
+        'Heat butter or oil in a non-stick pan on medium heat',
+        'Add chopped vegetables, sauté 1 min',
+        'Pour beaten eggs over vegetables',
+        'Let it set for 30 seconds without touching',
+        'Gently fold one half over the other',
+        'Slide onto plate. Serve immediately with toast'
+      ],
+      tips: ['Don\'t over-beat eggs — a few streaks are fine', 'Medium heat prevents rubbery texture', 'Add cheese inside before folding for a treat'],
+      image: 'https://images.unsplash.com/photo-1510693206972-df098062cb71?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=qiG85lK-wUI',
+      videoChannel: 'Tasty',
+    },
   ];
 
-  const categories = ['all', 'Breakfast', 'Main Course', 'Snack'];
+  const categories = ['all', 'Breakfast', 'Main Course', 'Non-Veg', 'Snack'];
 
-  const filteredRecipes = recipes.filter((recipe) => {
+  const getRecipeKey = (recipe: Recipe) =>
+    recipe.backendId ? `backend-${recipe.backendId}` : `static-${recipe.id}`;
+
+  const formatFoodCategory = (category: string) => {
+    const normalized = category.toLowerCase();
+    if (normalized.includes('breakfast') || normalized.includes('breakfast')) return 'Breakfast';
+    if (normalized.includes('snack') || normalized.includes('fruit') || normalized.includes('vegetable')) return 'Snack';
+    if (normalized.includes('main') || normalized.includes('rice') || normalized.includes('dal') || normalized.includes('curry') || normalized.includes('meat')) return 'Main Course';
+    return 'Main Course';
+  };
+
+  const parseTime = (time: string) => {
+    const match = time.match(/\d+/);
+    return match ? Number(match[0]) : 20;
+  };
+
+  const getImageForFood = (name: string) =>
+    `https://images.unsplash.com/featured/?${encodeURIComponent(name)}&w=900&q=80`;
+
+  const mapFoodToRecipe = (food: any): Recipe => ({
+    id: 1000 + Number(food.id),
+    backendId: Number(food.id),
+    name: food.name,
+    category: formatFoodCategory(food.category || 'Main Course'),
+    cost: Number(food.price || food.calories || 30),
+    time: parseTime(food.prepTime || '20 min'),
+    calories: Number(food.calories || 200),
+    protein: Number(food.protein || 8),
+    difficulty: 'Easy',
+    ingredients: [food.name, ...(food.vitamins || []).slice(0, 3)],
+    detailedSteps: [
+      `Start by preparing ${food.name}.`,
+      `Use fresh ingredients and follow simple cooking steps.`,
+      `Serve ${food.name} with your favorite sides or salads.`,
+    ],
+    tips: [`Add spices for taste`, `Use seasonal produce`, `Balance your meal with greens`],
+    image: getImageForFood(food.name),
+    videoLink: 'https://www.youtube.com/results?search_query=' + encodeURIComponent(food.name + ' recipe'),
+    videoChannel: 'Online Recipe',
+  });
+
+  const combinedRecipes = [...recipes, ...dynamicRecipes];
+
+  const loadSavedRecipeKeys = async () => {
+    const storageSaved = JSON.parse(localStorage.getItem('nutriwise-wishlist') || '[]') as string[];
+    const savedSet = new Set(storageSaved);
+
+    if (user) {
+      try {
+        const savedFoods = await apiService.getSavedFoods();
+        savedFoods.forEach((food: any) => savedSet.add(`backend-${food.id}`));
+      } catch (error) {
+        console.warn('Unable to load saved favorites from backend:', error);
+      }
+    }
+
+    setSavedRecipeKeys(savedSet);
+  };
+
+  // Load admin-created recipes from backend
+  const loadDynamicRecipes = async () => {
+    setIsLoadingRecipes(true);
+    try {
+      const data: any = await (apiService as any).getPublicRecipes();
+      const rows: any[] = Array.isArray(data) ? data : (data.recipes || []);
+      const mapped: Recipe[] = rows.map((r: any) => ({
+        id: 1000 + Number(r.id),
+        backendId: Number(r.id),
+        name: r.name,
+        category: r.category || 'Main Course',
+        cost: Number(r.cost) || 0,
+        time: Number(r.time) || 30,
+        calories: Number(r.calories) || 300,
+        protein: Number(r.protein) || 10,
+        difficulty: r.difficulty || 'Easy',
+        ingredients: (() => { try { return JSON.parse(r.ingredients); } catch { return r.ingredients ? r.ingredients.split(',') : []; } })(),
+        detailedSteps: (() => { try { return JSON.parse(r.steps); } catch { return r.steps ? r.steps.split('\n') : []; } })(),
+        tips: (() => { try { return JSON.parse(r.tips); } catch { return r.tips ? r.tips.split('\n') : []; } })(),
+        image: r.image || '',
+        videoLink: r.videoLink || '',
+        videoChannel: r.videoChannel || '',
+      }));
+      setDynamicRecipes(mapped);
+    } catch {
+      // silently ignore — static recipes will show
+    } finally {
+      setIsLoadingRecipes(false);
+    }
+  };
+
+  useEffect(() => {
+    loadDynamicRecipes();
+    loadSavedRecipeKeys();
+  }, [user]);
+
+  const filteredRecipes = combinedRecipes.filter((recipe) => {
     const matchesCategory = selectedCategory === 'all' || recipe.category === selectedCategory;
     const matchesBudget = !budgetFilter || recipe.cost <= Number(budgetFilter);
     const matchesSearch =
@@ -401,6 +824,41 @@ export function RecipeFinderPage() {
       recipe.ingredients.some((ing) => ing.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesCategory && matchesBudget && matchesSearch;
   });
+
+  const persistSavedKeys = (keys: Set<string>) => {
+    localStorage.setItem('nutriwise-wishlist', JSON.stringify(Array.from(keys)));
+  };
+
+  const handleToggleFavorite = async (recipe: Recipe) => {
+    const key = getRecipeKey(recipe);
+    const nextSavedKeys = new Set(savedRecipeKeys);
+
+    if (nextSavedKeys.has(key)) {
+      nextSavedKeys.delete(key);
+      setSavedRecipeKeys(nextSavedKeys);
+      persistSavedKeys(nextSavedKeys);
+      if (recipe.backendId && user) {
+        try {
+          await apiService.removeSavedFood(recipe.backendId);
+        } catch (error) {
+          console.warn('Unable to remove saved recipe from backend:', error);
+        }
+      }
+      return;
+    }
+
+    nextSavedKeys.add(key);
+    setSavedRecipeKeys(nextSavedKeys);
+    persistSavedKeys(nextSavedKeys);
+
+    if (recipe.backendId && user) {
+      try {
+        await apiService.saveFoodToFavorites(recipe.backendId);
+      } catch (error) {
+        console.warn('Unable to save recipe to backend:', error);
+      }
+    }
+  };
 
   return (
     <div className="min-h-screen py-8 px-4 sm:px-6 lg:px-8">
@@ -476,6 +934,12 @@ export function RecipeFinderPage() {
           </div>
         </div>
 
+        {loadError && (
+          <div className="mb-4 rounded-2xl bg-yellow-50 border border-yellow-200 p-4 text-sm text-yellow-900">
+            {loadError}
+          </div>
+        )}
+
         {/* Results Count */}
         <div className="mb-4 text-gray-600">
           Found {filteredRecipes.length} recipe{filteredRecipes.length !== 1 ? 's' : ''}
@@ -495,8 +959,22 @@ export function RecipeFinderPage() {
                   alt={recipe.name}
                   className="w-full h-full object-cover"
                 />
-                <div className="absolute top-3 right-3 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
-                  ₹{recipe.cost}
+                <div className="absolute top-3 right-3 flex items-center gap-2">
+                  <button
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleToggleFavorite(recipe);
+                    }}
+                    className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                      savedRecipeKeys.has(getRecipeKey(recipe)) ? 'bg-red-500 text-white' : 'bg-white/90 text-green-700 hover:bg-white'
+                    }`}
+                    title={savedRecipeKeys.has(getRecipeKey(recipe)) ? 'Remove from wishlist' : 'Add to wishlist'}
+                  >
+                    <Heart className="w-4 h-4" />
+                  </button>
+                  <div className="bg-green-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
+                    ₹{recipe.cost}
+                  </div>
                 </div>
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
                   <h3 className="text-white font-bold text-lg">{recipe.name}</h3>
@@ -558,7 +1036,18 @@ export function RecipeFinderPage() {
               </div>
 
               <div className="p-8">
-                <h2 className="text-3xl font-bold mb-4">{selectedRecipe.name}</h2>
+                <div className="flex items-center justify-between gap-4 mb-4">
+                  <h2 className="text-3xl font-bold">{selectedRecipe.name}</h2>
+                  <button
+                    onClick={() => handleToggleFavorite(selectedRecipe)}
+                    className={`inline-flex items-center justify-center w-11 h-11 rounded-full transition-all ${
+                      savedRecipeKeys.has(getRecipeKey(selectedRecipe)) ? 'bg-red-500 text-white' : 'bg-green-50 text-green-700 hover:bg-green-100'
+                    }`}
+                    title={savedRecipeKeys.has(getRecipeKey(selectedRecipe)) ? 'Remove from wishlist' : 'Add to wishlist'}
+                  >
+                    <Heart className="w-5 h-5" />
+                  </button>
+                </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                   <div className="bg-green-50 rounded-lg p-3 text-center">

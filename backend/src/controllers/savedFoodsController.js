@@ -1,7 +1,7 @@
 import db from '../config/database.js';
 
 export const saveFoodsToFavorites = (req, res) => {
-  const { userId } = req;
+  const { userId } = req.user;
   const { foodId } = req.body;
 
   db.run(
@@ -18,7 +18,7 @@ export const saveFoodsToFavorites = (req, res) => {
 };
 
 export const getUserSavedFoods = (req, res) => {
-  const { userId } = req;
+  const { userId } = req.user;
 
   db.all(
     'SELECT f.* FROM foods f JOIN saved_foods sf ON f.id = sf.foodId WHERE sf.userId = ? AND sf.isFavorite = 1',
@@ -34,7 +34,7 @@ export const getUserSavedFoods = (req, res) => {
 };
 
 export const removeSavedFood = (req, res) => {
-  const { userId } = req;
+  const { userId } = req.user;
   const { foodId } = req.params;
 
   db.run('DELETE FROM saved_foods WHERE userId = ? AND foodId = ?', [userId, foodId], function(err) {
@@ -47,7 +47,7 @@ export const removeSavedFood = (req, res) => {
 };
 
 export const isFoodSaved = (req, res) => {
-  const { userId } = req;
+  const { userId } = req.user;
   const { foodId } = req.params;
 
   db.get('SELECT * FROM saved_foods WHERE userId = ? AND foodId = ?', [userId, foodId], (err, saved) => {

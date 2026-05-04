@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router';
 import {
-  Calendar,
   DollarSign,
   TrendingDown,
   Flame,
@@ -230,6 +229,7 @@ export function Dashboard() {
   const [healthMetrics, setHealthMetrics] = useState<any>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [mealPlan, setMealPlan] = useState<any>({});
+  const [showAlgorithmDetails, setShowAlgorithmDetails] = useState(false);
 
   // Fetch dashboard data on component mount
   useEffect(() => {
@@ -243,12 +243,44 @@ export function Dashboard() {
       setError('');
 
       try {
-        // Fetch all dashboard data in parallel
-        const [dashData, statsData, healthData] = await Promise.all([
-          apiService.getDashboardData(),
-          apiService.getWeeklyStats(),
-          apiService.getHealthMetrics(),
-        ]);
+        // Check if profile exists (API or localStorage)
+        let profileData = null;
+        
+        try {
+          profileData = await apiService.getUserProfile();
+        } catch (err) {
+          // Try localStorage as fallback
+          const localProfile = localStorage.getItem('nutriwise-profile');
+          if (localProfile) {
+            profileData = JSON.parse(localProfile);
+          }
+        }
+
+        // If still no profile, redirect to setup
+        if (!profileData) {
+          setError('Please complete your health profile first');
+          setTimeout(() => {
+            navigate('/profile');
+          }, 1500);
+          return;
+        }
+
+        // Try to fetch dashboard data from API, but use mock data if it fails
+        let dashData, statsData, healthData;
+        
+        try {
+          [dashData, statsData, healthData] = await Promise.all([
+            apiService.getDashboardData(),
+            apiService.getWeeklyStats(),
+            apiService.getHealthMetrics(),
+          ]);
+        } catch (err) {
+          // API not available, use profile data directly
+          console.warn('Dashboard API not available, using local profile');
+          dashData = { userProfile: profileData };
+          statsData = { weeklyData: [] };
+          healthData = { metrics: {} };
+        }
 
         setDashboardData(dashData);
         setWeeklyStats(statsData);
@@ -259,8 +291,18 @@ export function Dashboard() {
         setNotificationsEnabled(notifyPref !== 'false');
 
         // Generate or fetch meal plan
-        if (dashData?.userProfile) {
-          const plan = generateMealPlan(dashData.userProfile, foodDatabase);
+        const userProfileToUse = dashData?.userProfile || profileData;
+        if (userProfileToUse) {
+          // Transform localStorage profile format to match what generateMealPlan expects
+          const mealPlanUserProfile = {
+            diseases: userProfileToUse.medicalConditions || [],
+            allergies: userProfileToUse.allergies || [],
+            preferences: userProfileToUse.dietaryPreference ? [userProfileToUse.dietaryPreference] : [],
+            preferredTags: ['high-protein', 'low-cost'],
+            dislikedFoods: [],
+            dailyBudget: userProfileToUse.budgetPerWeek ? Math.round(userProfileToUse.budgetPerWeek / 7) : 100,
+          };
+          const plan = generateMealPlan(mealPlanUserProfile, foodDatabase);
           setMealPlan(plan);
         }
       } catch (error: any) {
@@ -318,6 +360,65 @@ export function Dashboard() {
     alert('✅ Notifications set for all meals!');
   };
 
+  const handleGenerateMealPlan = async () => {
+    if (!dashboardData?.userProfile) return;
+
+    setIsGenerating(true);
+    try {
+      const mealPlanUserProfile = {
+        diseases: dashboardData.userProfile.medicalConditions || [],
+        allergies: dashboardData.userProfile.allergies || [],
+        preferences: dashboardData.userProfile.dietaryPreference ? [dashboardData.userProfile.dietaryPreference] : [],
+        preferredTags: ['high-protein', 'low-cost'],
+        dislikedFoods: [],
+        dailyBudget: dashboardData.userProfile.budgetPerWeek ? Math.round(dashboardData.userProfile.budgetPerWeek / 7) : 100,
+      };
+      const newPlan = generateMealPlan(mealPlanUserProfile, foodDatabase);
+      setMealPlan(newPlan);
+    } catch (error) {
+      console.error('Failed to generate meal plan:', error);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleRegenerateSingleMeal = (mealType: string) => {
+    if (!dashboardData?.userProfile) return;
+
+    const mealPlanUserProfile = {
+      diseases: dashboardData.userProfile.medicalConditions || [],
+      allergies: dashboardData.userProfile.allergies || [],
+      preferences: dashboardData.userProfile.dietaryPreference ? [dashboardData.userProfile.dietaryPreference] : [],
+      preferredTags: ['high-protein', 'low-cost'],
+      dislikedFoods: [],
+      dailyBudget: dashboardData.userProfile.budgetPerWeek ? Math.round(dashboardData.userProfile.budgetPerWeek / 7) : 100,
+    };
+
+    const currentName = mealPlan[mealType]?.name;
+    const alternative = selectAlternativeMeal(mealType, currentName, mealPlanUserProfile, foodDatabase);
+
+    if (alternative) {
+      setMealPlan((prev: any) => ({
+        ...prev,
+        [mealType]: {
+          name: alternative.name,
+          items: alternative.items,
+          cost: alternative.cost,
+          calories: alternative.calories,
+          protein: alternative.protein,
+          carbs: alternative.carbs,
+          fats: alternative.fats,
+          time: alternative.time,
+          timing: alternative.timing,
+          idealTime: alternative.idealTime,
+          score: alternative.score,
+        },
+      }));
+    } else {
+      console.warn(`No alternative meal found for ${mealType}`);
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await logout();
@@ -341,18 +442,40 @@ export function Dashboard() {
 
   // Error state
   if (error) {
+    const isProfileMissing = error.includes('profile');
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50 flex items-center justify-center px-4">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-8 max-w-md">
-          <AlertTriangle className="w-10 h-10 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-red-800 mb-2">Error Loading Dashboard</h2>
-          <p className="text-red-700 mb-6">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
-          >
-            Retry
-          </button>
+        <div className={`${isProfileMissing ? 'bg-blue-50 border-blue-200' : 'bg-red-50 border-red-200'} border rounded-lg p-8 max-w-md`}>
+          <AlertTriangle className={`w-10 h-10 ${isProfileMissing ? 'text-blue-500' : 'text-red-500'} mx-auto mb-4`} />
+          <h2 className={`text-xl font-bold ${isProfileMissing ? 'text-blue-800' : 'text-red-800'} mb-2`}>
+            {isProfileMissing ? 'Complete Your Profile' : 'Error Loading Dashboard'}
+          </h2>
+          <p className={`${isProfileMissing ? 'text-blue-700' : 'text-red-700'} mb-6`}>{error}</p>
+          <div className="flex gap-3">
+            {isProfileMissing ? (
+              <button
+                onClick={() => navigate('/profile')}
+                className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium"
+              >
+                Complete Profile
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 font-medium"
+                >
+                  Retry
+                </button>
+                <button
+                  onClick={() => navigate('/profile')}
+                  className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 font-medium"
+                >
+                  Go to Profile
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -368,6 +491,15 @@ export function Dashboard() {
   const totalCost = Object.values(mealPlan).reduce((sum: number, meal: any) => sum + (meal.cost || 0), 0);
   const totalCalories = Object.values(mealPlan).reduce((sum: number, meal: any) => sum + (meal.calories || 0), 0);
   const totalProtein = Object.values(mealPlan).reduce((sum: number, meal: any) => sum + (meal.protein || 0), 0);
+  const totalCarbs = Object.values(mealPlan).reduce((sum: number, meal: any) => sum + (meal.carbs || 0), 0);
+  const totalFat = Object.values(mealPlan).reduce((sum: number, meal: any) => sum + (meal.fats || 0), 0);
+
+  const nutritionData = [
+    { id: 'calories', name: 'Calories', value: totalCalories, color: '#34d399' },
+    { id: 'protein', name: 'Protein', value: totalProtein, color: '#60a5fa' },
+    { id: 'carbs', name: 'Carbs', value: totalCarbs, color: '#fbbf24' },
+    { id: 'fats', name: 'Fats', value: totalFat, color: '#f97316' },
+  ];
 
   const dailyBudget = budgetInfo.budget || 100;
   const budgetRemaining = dailyBudget - totalCost;
@@ -755,81 +887,99 @@ export function Dashboard() {
             </div>
           </div>
 
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Nutrition Breakdown */}
-            <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
-              <h3 className="font-bold mb-4">Nutrition Breakdown</h3>
+          {/* Analytics Sidebar */}
+          <div className="space-y-5">
+
+            {/* Macro Breakdown Chart */}
+            <div className="bg-white rounded-2xl p-5 shadow-lg border border-gray-100">
+              <h3 className="font-bold text-gray-800 mb-4">Today's Macros</h3>
               <div className="space-y-3">
-                {nutritionData.map((item) => (
-                  <div key={item.id}>
-                    <div className="flex items-center justify-between text-sm mb-1">
-                      <div className="flex items-center space-x-2">
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: item.color }}
-                        ></div>
-                        <span>{item.name}</span>
+                {[
+                  { label: 'Calories', value: totalCalories, max: 2000, color: '#34d399', unit: 'kcal' },
+                  { label: 'Protein',  value: totalProtein,  max: 60,   color: '#60a5fa', unit: 'g' },
+                  { label: 'Carbs',    value: totalCarbs,    max: 250,  color: '#fbbf24', unit: 'g' },
+                  { label: 'Fats',     value: totalFat,      max: 65,   color: '#f97316', unit: 'g' },
+                ].map(item => {
+                  const pct = Math.min(100, Math.round((item.value / item.max) * 100));
+                  return (
+                    <div key={item.label}>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="font-medium text-gray-700 flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: item.color }} />
+                          {item.label}
+                        </span>
+                        <span className="font-semibold text-gray-800">
+                          {item.value}{item.unit} <span className="text-gray-400 font-normal">/ {item.max}</span>
+                        </span>
                       </div>
-                      <span className="font-semibold">{item.value}g</span>
+                      <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+                        <div className="h-3 rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: item.color }} />
+                      </div>
+                      <div className="text-right text-xs text-gray-400 mt-0.5">{pct}%</div>
                     </div>
-                    <div className="w-full bg-gray-100 rounded-full h-2">
-                      <div
-                        className="h-2 rounded-full transition-all"
-                        style={{
-                          width: `${(item.value / 263) * 100}%`,
-                          backgroundColor: item.color,
-                        }}
-                      ></div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
-            {/* Weekly Spending */}
-            <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
-              <h3 className="font-bold mb-4">Weekly Spending</h3>
-              <div className="flex items-end justify-between space-x-2 h-40 mb-4">
-                {weeklyData.map((day) => (
-                  <div key={day.id} className="flex-1 flex flex-col items-center">
-                    <div className="w-full bg-green-500 rounded-t-lg transition-all hover:bg-green-600" 
-                         style={{ height: `${(day.spent / 100) * 100}%` }}
-                         title={`₹${day.spent}`}
-                    ></div>
-                    <div className="text-xs text-gray-600 mt-2">{day.day}</div>
+            {/* Budget Ring */}
+            <div className="bg-white rounded-2xl p-5 shadow-lg border border-gray-100">
+              <h3 className="font-bold text-gray-800 mb-4">Budget Usage</h3>
+              <div className="flex items-center gap-5">
+                <div className="relative flex-shrink-0">
+                  <svg width="90" height="90" viewBox="0 0 90 90">
+                    <circle cx="45" cy="45" r="36" fill="none" stroke="#e5e7eb" strokeWidth="10" />
+                    <circle cx="45" cy="45" r="36" fill="none" stroke="#34d399" strokeWidth="10"
+                      strokeDasharray={`${Math.min(100, Math.round((totalCost / dailyBudget) * 100)) * 2.26} 226`}
+                      strokeLinecap="round"
+                      transform="rotate(-90 45 45)" />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-lg font-bold text-gray-800">
+                      {Math.min(100, Math.round((totalCost / dailyBudget) * 100))}%
+                    </span>
                   </div>
-                ))}
-              </div>
-              <div className="pt-4 border-t border-gray-100">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Weekly Average</span>
-                  <span className="font-bold">₹93</span>
                 </div>
-                <div className="flex items-center justify-between text-sm mt-2">
-                  <span className="text-gray-600">Monthly Projection</span>
-                  <span className="font-bold text-green-600">₹2,790</span>
+                <div className="flex-1 space-y-2 text-sm">
+                  <div className="flex justify-between"><span className="text-gray-500">Spent</span><span className="font-bold text-gray-800">₹{totalCost}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Budget</span><span className="font-bold text-gray-800">₹{dailyBudget}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Remaining</span><span className="font-bold text-green-600">₹{Math.max(0, budgetRemaining)}</span></div>
                 </div>
               </div>
             </div>
 
-            {/* Tips Card */}
-            <div className="bg-gradient-to-br from-blue-500 to-cyan-600 rounded-2xl p-6 text-white shadow-lg">
+            {/* Meal Status */}
+            <div className="bg-white rounded-2xl p-5 shadow-lg border border-gray-100">
+              <h3 className="font-bold text-gray-800 mb-3">Today's Meals</h3>
+              <div className="grid grid-cols-2 gap-3">
+                {['breakfast', 'lunch', 'snack', 'dinner'].map(type => {
+                  const has = !!mealPlan[type];
+                  return (
+                    <div key={type} className={`flex items-center gap-2 p-2.5 rounded-xl text-sm font-medium ${
+                      has ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-400'
+                    }`}>
+                      <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${has ? 'bg-green-500' : 'bg-gray-300'}`} />
+                      {type.charAt(0).toUpperCase() + type.slice(1)}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Tip Card */}
+            <div className="bg-gradient-to-br from-blue-500 to-cyan-600 rounded-2xl p-5 text-white shadow-lg">
               <h3 className="font-bold mb-2">💡 Today's Tip</h3>
-              <p className="text-sm text-blue-100 mb-4">
-                Eggs are a great source of protein and cost-effective! Try making egg bhurji for a quick meal.
+              <p className="text-sm text-blue-100 mb-3">
+                Prep your meals in advance on Sundays — it saves time and keeps you on budget all week!
               </p>
-              <Link
-                to="/tips"
-                className="inline-flex items-center text-sm font-medium hover:underline"
-              >
-                More nutrition tips
-                <ArrowRight className="w-4 h-4 ml-1" />
+              <Link to="/tips" className="inline-flex items-center text-sm font-medium hover:underline">
+                More nutrition tips <ArrowRight className="w-4 h-4 ml-1" />
               </Link>
             </div>
+
           </div>
         </div>
       </div>
     </div>
   );
-}
+}

@@ -5,6 +5,7 @@ import { getAllFoods, getFoodById, searchFoods, getFoodsByCategory, getCategorie
 import { createMealPlan, getUserMealPlans, getMealPlanById, addMealToPlain, removeMealFromPlan, deleteMealPlan } from './controllers/mealPlanController.js';
 import { logFood, getFoodLog, getDailyNutrition, deleteFoodLog, getNutritionTrends } from './controllers/foodLogController.js';
 import { saveFoodsToFavorites, getUserSavedFoods, removeSavedFood, isFoodSaved } from './controllers/savedFoodsController.js';
+import { requireAdmin, getAllUsers, updateUserRole, deleteUser, createFood, updateFood, deleteFood, getAllFoodsAdmin, getAllRecipesAdmin, createRecipe, updateRecipe, deleteRecipe, getAdminStats } from './controllers/adminController.js';
 import { getDashboardData, getWeeklyStats, getHealthMetrics } from './controllers/dashboardController.js';
 import verifyToken from './middleware/auth.js';
 import { validateRegistration, validateProfile } from './middleware/validate.js';
@@ -21,7 +22,7 @@ const PORT = process.env.PORT || 5000;
 app.use(express.json());
 app.use(
   cors({
-    origin: (process.env.ALLOWED_ORIGINS || 'http://localhost:5173').split(','),
+    origin: (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:5174,http://localhost:5175,http://127.0.0.1:5173,http://127.0.0.1:5174,http://127.0.0.1:5175').split(','),
     credentials: true,
   })
 );
@@ -74,10 +75,29 @@ app.use('/api/saved-foods', express.Router()
   .get('/check/:foodId', verifyToken, isFoodSaved)
 );
 
+// Admin routes
+app.use('/api/admin', express.Router()
+  .get('/users', verifyToken, requireAdmin, getAllUsers)
+  .put('/users/role', verifyToken, requireAdmin, updateUserRole)
+  .delete('/users/:userId', verifyToken, requireAdmin, deleteUser)
+  .get('/foods', verifyToken, requireAdmin, getAllFoodsAdmin)
+  .post('/foods', verifyToken, requireAdmin, createFood)
+  .put('/foods/:id', verifyToken, requireAdmin, updateFood)
+  .delete('/foods/:id', verifyToken, requireAdmin, deleteFood)
+  .get('/stats', verifyToken, requireAdmin, getAdminStats)
+  .get('/recipes', verifyToken, requireAdmin, getAllRecipesAdmin)
+  .post('/recipes', verifyToken, requireAdmin, createRecipe)
+  .put('/recipes/:id', verifyToken, requireAdmin, updateRecipe)
+  .delete('/recipes/:id', verifyToken, requireAdmin, deleteRecipe)
+);
+
 // Dashboard routes
 app.get('/api/dashboard', verifyToken, getDashboardData);
 app.get('/api/dashboard/weekly-stats', verifyToken, getWeeklyStats);
 app.get('/api/dashboard/health-metrics', verifyToken, getHealthMetrics);
+
+// Public recipes endpoint (for recipe finder page)
+app.get('/api/recipes', getAllRecipesAdmin);
 
 // Root route
 app.get('/', (req, res) => {

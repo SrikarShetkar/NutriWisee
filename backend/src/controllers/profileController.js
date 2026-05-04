@@ -1,7 +1,7 @@
 import db from '../config/database.js';
 
 export const getUserProfile = (req, res) => {
-  const { userId } = req;
+  const { userId } = req.user;
 
   db.get('SELECT * FROM user_profiles WHERE userId = ?', [userId], (err, profile) => {
     if (err) {
@@ -17,19 +17,21 @@ export const getUserProfile = (req, res) => {
 };
 
 export const createOrUpdateProfile = (req, res) => {
-  const { userId } = req;
+  const { userId } = req.user;
   const {
     age,
     gender,
     height,
     weight,
     activityLevel,
-    dietaryRestrictions,
+    dietaryPreference,
+    dietaryRestrictions = dietaryPreference,
     allergies,
     budgetPerWeek,
     healthGoals,
     medicalConditions,
     preferredCuisines,
+    targetWeight,
     step,
   } = req.body;
 
@@ -63,13 +65,14 @@ export const createOrUpdateProfile = (req, res) => {
         updateFields.push('activityLevel = ?');
         values.push(activityLevel);
       }
-      if (dietaryRestrictions !== undefined) {
+      const dietaryValue = dietaryRestrictions ?? dietaryPreference;
+      if (dietaryValue !== undefined) {
         updateFields.push('dietaryRestrictions = ?');
-        values.push(dietaryRestrictions);
+        values.push(dietaryValue);
       }
       if (allergies !== undefined) {
         updateFields.push('allergies = ?');
-        values.push(allergies);
+        values.push(Array.isArray(allergies) ? JSON.stringify(allergies) : (allergies || ''));
       }
       if (budgetPerWeek !== undefined) {
         updateFields.push('budgetPerWeek = ?');
@@ -77,11 +80,11 @@ export const createOrUpdateProfile = (req, res) => {
       }
       if (healthGoals !== undefined) {
         updateFields.push('healthGoals = ?');
-        values.push(healthGoals);
+        values.push(Array.isArray(healthGoals) ? JSON.stringify(healthGoals) : (healthGoals || ''));
       }
       if (medicalConditions !== undefined) {
         updateFields.push('medicalConditions = ?');
-        values.push(medicalConditions);
+        values.push(Array.isArray(medicalConditions) ? JSON.stringify(medicalConditions) : (medicalConditions || ''));
       }
       if (preferredCuisines !== undefined) {
         updateFields.push('preferredCuisines = ?');
@@ -104,13 +107,18 @@ export const createOrUpdateProfile = (req, res) => {
       });
     } else {
       // Create new profile
+      const dietaryVal = dietaryRestrictions ?? dietaryPreference;
+      const allergiesVal = Array.isArray(allergies) ? JSON.stringify(allergies) : (allergies || '');
+      const healthGoalsVal = Array.isArray(healthGoals) ? JSON.stringify(healthGoals) : (healthGoals || '');
+      const medicalVal = Array.isArray(medicalConditions) ? JSON.stringify(medicalConditions) : (medicalConditions || '');
       db.run(
         `INSERT INTO user_profiles (userId, age, gender, height, weight, activityLevel, dietaryRestrictions, allergies, budgetPerWeek, healthGoals, medicalConditions, preferredCuisines)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [userId, age, gender, height, weight, activityLevel, dietaryRestrictions, allergies, budgetPerWeek, healthGoals, medicalConditions, preferredCuisines],
+        [userId, age, gender, height, weight, activityLevel, dietaryVal, allergiesVal, budgetPerWeek, healthGoalsVal, medicalVal, preferredCuisines || ''],
         function(err) {
           if (err) {
-            return res.status(500).json({ error: 'Failed to create profile' });
+            console.error('Profile create error:', err);
+            return res.status(500).json({ error: 'Failed to create profile: ' + err.message });
           }
 
           res.status(201).json({
@@ -143,7 +151,7 @@ export const calculateBMI = (req, res) => {
 };
 
 export const deleteProfile = (req, res) => {
-  const { userId } = req;
+  const { userId } = req.user;
 
   db.run('DELETE FROM user_profiles WHERE userId = ?', [userId], function(err) {
     if (err) {

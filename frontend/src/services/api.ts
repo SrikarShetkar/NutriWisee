@@ -34,12 +34,15 @@ class ApiService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        throw new Error(errorData.error || errorData.message || `HTTP error! status: ${response.status}`);
       }
 
       return await response.json();
-    } catch (error) {
+    } catch (error: any) {
       console.error('API request failed:', error);
+      if (error instanceof TypeError) {
+        throw new Error('Unable to connect to the server. Please make sure the backend is running.');
+      }
       throw error;
     }
   }
@@ -51,7 +54,13 @@ class ApiService {
     password: string;
     confirmPassword: string;
   }) {
-    return this.request<{ message: string; userId: number; token: string }>(
+    return this.request<{
+      message: string;
+      userId: number;
+      token: string;
+      role?: string;
+      username?: string;
+    }>(
       '/auth/register',
       {
         method: 'POST',
@@ -61,7 +70,13 @@ class ApiService {
   }
 
   async login(credentials: { email: string; password: string }) {
-    return this.request<{ message: string; userId: number; token: string }>(
+    return this.request<{
+      message: string;
+      userId: number;
+      token: string;
+      role?: string;
+      username?: string;
+    }>(
       '/auth/login',
       {
         method: 'POST',
@@ -231,6 +246,46 @@ class ApiService {
   // Health check
   async healthCheck() {
     return this.request('/health');
+  }
+
+  // Admin stats
+  async getAdminStats() {
+    return this.request('/admin/stats');
+  }
+
+  // Admin recipes CRUD
+  async getAdminRecipes() {
+    return this.request('/admin/recipes');
+  }
+
+  async createAdminRecipe(data: any) {
+    return this.request('/admin/recipes', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async updateAdminRecipe(id: number, data: any) {
+    return this.request(`/admin/recipes/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  }
+
+  async deleteAdminRecipe(id: number) {
+    return this.request(`/admin/recipes/${id}`, { method: 'DELETE' });
+  }
+
+  // Public recipes (admin-created, visible to all users)
+  async getPublicRecipes() {
+    return this.request('/recipes');
+  }
+
+  // Admin users
+  async getAdminUsers() {
+    return this.request('/admin/users');
+  }
+
+  async updateUserRole(userId: number, role: string) {
+    return this.request('/admin/users/role', { method: 'PUT', body: JSON.stringify({ userId, role }) });
+  }
+
+  async deleteAdminUser(userId: number) {
+    return this.request(`/admin/users/${userId}`, { method: 'DELETE' });
   }
 }
 

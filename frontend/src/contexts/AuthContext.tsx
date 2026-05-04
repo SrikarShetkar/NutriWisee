@@ -5,16 +5,18 @@ interface User {
   id: number;
   username: string;
   email: string;
+  role?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (userData: { username: string; email: string; password: string; confirmPassword: string }) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ userId: number; token: string; role?: string; username?: string }>;
+  register: (userData: { username: string; email: string; password: string; confirmPassword: string }) => Promise<{ userId: number; token: string; role?: string; username?: string }>;
   logout: () => void;
   isAuthenticated: boolean;
+  isAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -55,8 +57,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       const userData = {
         id: response.userId,
-        username: email.split('@')[0], // Temporary username
+        username: response.username || email.split('@')[0],
         email: email,
+        role: response.role || 'user',
       };
 
       setUser(userData);
@@ -65,6 +68,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Store in localStorage
       localStorage.setItem('nutriwise-token', response.token);
       localStorage.setItem('nutriwise-user', JSON.stringify(userData));
+
+      return response;
     } catch (error) {
       throw error;
     }
@@ -78,6 +83,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         id: response.userId,
         username: userData.username,
         email: userData.email,
+        role: response.role || 'user',
       };
 
       setUser(userInfo);
@@ -86,6 +92,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Store in localStorage
       localStorage.setItem('nutriwise-token', response.token);
       localStorage.setItem('nutriwise-user', JSON.stringify(userInfo));
+
+      return response;
     } catch (error) {
       throw error;
     }
@@ -109,6 +117,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     register,
     logout,
     isAuthenticated: !!user && !!token,
+    isAdmin: user?.role === 'admin',
   };
 
   return (
