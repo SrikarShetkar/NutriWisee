@@ -1,4 +1,5 @@
 import { createBrowserRouter } from "react-router";
+import { SplashScreen } from "./pages/SplashScreen";
 import { LandingPageV2 } from "./pages/LandingPageV2";
 import { LoginPage } from "./pages/LoginPage";
 import { AdminLoginPage } from "./pages/AdminLoginPage";
@@ -20,9 +21,19 @@ import { AdminProtectedRoute } from "./components/AdminProtectedRoute";
 export const router = createBrowserRouter([
   {
     path: "/",
+    Component: SplashScreen,
+  },
+  {
+    path: "/landing",
     Component: RootLayout,
     children: [
       { index: true, Component: LandingPageV2 },
+    ],
+  },
+  {
+    path: "/",
+    Component: RootLayout,
+    children: [
       { path: "login", Component: LoginPage },
       { path: "signup", Component: LoginPage }, // Reuse LoginPage for signup
       { path: "admin/login", Component: AdminLoginPage },

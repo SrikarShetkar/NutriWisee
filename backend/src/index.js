@@ -5,7 +5,7 @@ import { getAllFoods, getFoodById, searchFoods, getFoodsByCategory, getCategorie
 import { createMealPlan, getUserMealPlans, getMealPlanById, addMealToPlain, removeMealFromPlan, deleteMealPlan } from './controllers/mealPlanController.js';
 import { logFood, getFoodLog, getDailyNutrition, deleteFoodLog, getNutritionTrends } from './controllers/foodLogController.js';
 import { saveFoodsToFavorites, getUserSavedFoods, removeSavedFood, isFoodSaved } from './controllers/savedFoodsController.js';
-import { requireAdmin, getAllUsers, updateUserRole, deleteUser, createFood, updateFood, deleteFood, getAllFoodsAdmin, getAllRecipesAdmin, createRecipe, updateRecipe, deleteRecipe, getAdminStats } from './controllers/adminController.js';
+import { requireAdmin, getAllUsers, updateUserRole, deleteUser, createFood, updateFood, deleteFood, getAllFoodsAdmin, getAllRecipesAdmin, createRecipe, updateRecipe, deleteRecipe, getAdminStats, getSeasonalFoods, createSeasonalFood, updateSeasonalFood, deleteSeasonalFood, getVitaminSources, createVitaminSource, updateVitaminSource, deleteVitaminSource, getNutritionTips, createNutritionTip, updateNutritionTip, deleteNutritionTip } from './controllers/adminController.js';
 import { getDashboardData, getWeeklyStats, getHealthMetrics } from './controllers/dashboardController.js';
 import verifyToken from './middleware/auth.js';
 import { validateRegistration, validateProfile } from './middleware/validate.js';
@@ -89,6 +89,18 @@ app.use('/api/admin', express.Router()
   .post('/recipes', verifyToken, requireAdmin, createRecipe)
   .put('/recipes/:id', verifyToken, requireAdmin, updateRecipe)
   .delete('/recipes/:id', verifyToken, requireAdmin, deleteRecipe)
+  .get('/seasonal-foods', verifyToken, requireAdmin, getSeasonalFoods)
+  .post('/seasonal-foods', verifyToken, requireAdmin, createSeasonalFood)
+  .put('/seasonal-foods/:id', verifyToken, requireAdmin, updateSeasonalFood)
+  .delete('/seasonal-foods/:id', verifyToken, requireAdmin, deleteSeasonalFood)
+  .get('/vitamin-sources', verifyToken, requireAdmin, getVitaminSources)
+  .post('/vitamin-sources', verifyToken, requireAdmin, createVitaminSource)
+  .put('/vitamin-sources/:id', verifyToken, requireAdmin, updateVitaminSource)
+  .delete('/vitamin-sources/:id', verifyToken, requireAdmin, deleteVitaminSource)
+  .get('/nutrition-tips', verifyToken, requireAdmin, getNutritionTips)
+  .post('/nutrition-tips', verifyToken, requireAdmin, createNutritionTip)
+  .put('/nutrition-tips/:id', verifyToken, requireAdmin, updateNutritionTip)
+  .delete('/nutrition-tips/:id', verifyToken, requireAdmin, deleteNutritionTip)
 );
 
 // Dashboard routes

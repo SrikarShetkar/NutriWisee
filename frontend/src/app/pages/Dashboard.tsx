@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router';
 import {
   DollarSign,
@@ -215,6 +215,73 @@ function generateMealPlan(userProfile: typeof userProfile, foodDb: typeof foodDa
   console.log('✅ Meal plan generated successfully!');
   
   return mealPlan;
+}
+
+// Function to select an alternative meal from the same category
+function selectAlternativeMeal(mealType: string, currentMealName: string | undefined, userProfile: typeof userProfile, foodDb: typeof foodDatabase) {
+  // Filter foods for this meal category
+  const categoryFoods = foodDb.filter((food) => food.category === mealType);
+  
+  // Apply health filtering
+  const healthFilteredFoods = categoryFoods.filter((food) => {
+    const conflictsWithDiseases = food.avoid.some((tag) => userProfile.diseases.includes(tag));
+    const conflictsWithAllergies = food.avoid.some((tag) => userProfile.allergies.includes(tag));
+    const conflictsWithPreferences = food.avoid.some((tag) => userProfile.preferences.includes(tag));
+    const isDisliked = userProfile.dislikedFoods.includes(food.name);
+    return !conflictsWithDiseases && !conflictsWithAllergies && !conflictsWithPreferences && !isDisliked;
+  });
+  
+  // Exclude current meal
+  const alternativeFoods = healthFilteredFoods.filter((food) => food.name !== currentMealName);
+  
+  if (alternativeFoods.length === 0) {
+    return null;
+  }
+  
+  // Score and select best alternative
+  const scoredFoods = alternativeFoods.map((food) => {
+    let score = 0;
+    
+    const matchingTags = food.tags.filter((tag) => userProfile.preferredTags.includes(tag));
+    if (matchingTags.length > 0) {
+      score += matchingTags.length * 30;
+    }
+    
+    if (food.cost <= 25) score += 25;
+    else if (food.cost <= 35) score += 15;
+    else if (food.cost <= 45) score += 5;
+    
+    if (food.protein >= 20) score += 25;
+    else if (food.protein >= 15) score += 15;
+    else if (food.protein >= 10) score += 8;
+    
+    if (food.tags.includes('diabetes-friendly') && userProfile.diseases.includes('diabetes')) {
+      score += 30;
+    }
+    
+    const caloriesPerRupee = food.calories / food.cost;
+    if (caloriesPerRupee > 15) score += 10;
+    else if (caloriesPerRupee > 10) score += 5;
+    
+    return { ...food, score };
+  });
+  
+  scoredFoods.sort((a, b) => b.score - a.score);
+  
+  const selectedFood = scoredFoods[0];
+  return {
+    name: selectedFood.name,
+    items: selectedFood.items,
+    cost: selectedFood.cost,
+    calories: selectedFood.calories,
+    protein: selectedFood.protein,
+    carbs: selectedFood.carbs || 0,
+    fats: selectedFood.fats || 0,
+    time: selectedFood.time,
+    timing: selectedFood.timing,
+    idealTime: selectedFood.idealTime,
+    score: selectedFood.score,
+  };
 }
 
 export function Dashboard() {
@@ -483,9 +550,25 @@ export function Dashboard() {
 
   // User info from dashboard data or auth context
   const userName = dashboardData?.userName || user?.username || 'Student';
-  const userProfile = dashboardData?.userProfile || {};
+  const currentUserProfile = dashboardData?.userProfile || {};
   const dailyStats = dashboardData?.dailyStats || {};
   const budgetInfo = dashboardData?.budgetInfo || { spent: 0, budget: 0 };
+
+  // Memoized calculation for algorithm details 
+  const filteredFoodsCount = useMemo(() => {
+    return foodDatabase.filter((food) => {
+      const conflictsWithDiseases = food.avoid.some((tag) => 
+        (currentUserProfile.medicalConditions || []).includes(tag)
+      );
+      const conflictsWithAllergies = food.avoid.some((tag) => 
+        (currentUserProfile.allergies || []).includes(tag)
+      );
+      const conflictsWithPreferences = food.avoid.some((tag) => 
+        (currentUserProfile.dietaryPreference ? [currentUserProfile.dietaryPreference] : []).includes(tag)
+      );
+      return !conflictsWithDiseases && !conflictsWithAllergies && !conflictsWithPreferences;
+    }).length;
+  }, [currentUserProfile]);
 
   // Calculated values
   const totalCost = Object.values(mealPlan).reduce((sum: number, meal: any) => sum + (meal.cost || 0), 0);
@@ -665,18 +748,12 @@ export function Dashboard() {
                     <div className="flex-1">
                       <h5 className="font-semibold text-gray-800 mb-1">Apply Health Filtering</h5>
                       <p className="text-sm text-gray-600 mb-2">
-                        Filtered {foodDatabase.length} foods → {foodDatabase.filter((food) => {
-                          const conflictsWithDiseases = food.avoid.some((tag) => userProfile.diseases.includes(tag));
-                          const conflictsWithAllergies = food.avoid.some((tag) => userProfile.allergies.includes(tag));
-                          const conflictsWithPreferences = food.avoid.some((tag) => userProfile.preferences.includes(tag));
-                          const isDisliked = userProfile.dislikedFoods.includes(food.name);
-                          return !conflictsWithDiseases && !conflictsWithAllergies && !conflictsWithPreferences && !isDisliked;
-                        }).length} safe foods
+                        Filtered {foodDatabase.length} foods → {filteredFoodsCount} safe foods
                       </p>
                       <div className="bg-purple-50 rounded-lg p-3 text-xs space-y-1">
-                        <div className="text-gray-700">✓ Removed: Foods with egg (vegetarian preference)</div>
-                        <div className="text-gray-700">✓ Removed: Foods with lactose (if allergic)</div>
-                        <div className="text-gray-700">✓ Kept: Diabetes-friendly options</div>
+                        <div className="text-gray-700">✓ Removed: Foods conflicting with {currentUserProfile.medicalConditions?.length ? currentUserProfile.medicalConditions[0] : 'diseases'}</div>
+                        <div className="text-gray-700">✓ Removed: Foods with allergies</div>
+                        <div className="text-gray-700">✓ Kept: {currentUserProfile.dietaryPreference || 'Healthy'} options</div>
                       </div>
                     </div>
                   </div>
@@ -982,4 +1059,4 @@ export function Dashboard() {
       </div>
     </div>
   );
-}
+}

@@ -287,6 +287,57 @@ class ApiService {
   async deleteAdminUser(userId: number) {
     return this.request(`/admin/users/${userId}`, { method: 'DELETE' });
   }
+
+  // Seasonal Foods
+  async getSeasonalFoods() {
+    return this.request('/admin/seasonal-foods');
+  }
+
+  async createSeasonalFood(data: any) {
+    return this.request('/admin/seasonal-foods', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async updateSeasonalFood(id: number, data: any) {
+    return this.request(`/admin/seasonal-foods/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  }
+
+  async deleteSeasonalFood(id: number) {
+    return this.request(`/admin/seasonal-foods/${id}`, { method: 'DELETE' });
+  }
+
+  // Vitamin Sources
+  async getVitaminSources() {
+    return this.request('/admin/vitamin-sources');
+  }
+
+  async createVitaminSource(data: any) {
+    return this.request('/admin/vitamin-sources', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async updateVitaminSource(id: number, data: any) {
+    return this.request(`/admin/vitamin-sources/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  }
+
+  async deleteVitaminSource(id: number) {
+    return this.request(`/admin/vitamin-sources/${id}`, { method: 'DELETE' });
+  }
+
+  // Nutrition Tips
+  async getNutritionTipsAdmin() {
+    return this.request('/admin/nutrition-tips');
+  }
+
+  async createNutritionTip(data: any) {
+    return this.request('/admin/nutrition-tips', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async updateNutritionTip(id: number, data: any) {
+    return this.request(`/admin/nutrition-tips/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  }
+
+  async deleteNutritionTip(id: number) {
+    return this.request(`/admin/nutrition-tips/${id}`, { method: 'DELETE' });
+  }
 }
 
 export const apiService = new ApiService();
