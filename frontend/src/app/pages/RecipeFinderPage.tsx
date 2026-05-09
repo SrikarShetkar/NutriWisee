@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Clock, DollarSign, Flame, ChefHat, Filter, Play, X, User, Heart } from 'lucide-react';
+import { Search, Clock, DollarSign, Flame, ChefHat, Play, X, Heart, Edit2, Trash2, Save, AlertCircle } from 'lucide-react';
 import { apiService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -28,11 +28,109 @@ export function RecipeFinderPage() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [dynamicRecipes, setDynamicRecipes] = useState<Recipe[]>([]);
+  const [customRecipes, setCustomRecipes] = useState<Recipe[]>([]);
   const [savedRecipeKeys, setSavedRecipeKeys] = useState<Set<string>>(new Set());
   const [isLoadingRecipes, setIsLoadingRecipes] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [userName, setUserName] = useState('');
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
+
+  // Admin inline edit/delete state
+  const [adminEditRecipe, setAdminEditRecipe] = useState<any>(null);
+  const [adminDeleteId, setAdminDeleteId] = useState<number | null>(null);
+  const [adminToast, setAdminToast] = useState('');
+
+  const notifyAdmin = (msg: string) => { setAdminToast(msg); setTimeout(() => setAdminToast(''), 3000); };
+
+  // Static recipe overrides (admin edits on built-in recipes)
+  const [staticOverrides, setStaticOverrides] = useState<Record<number,any>>({});
+  const [deletedStaticIds, setDeletedStaticIds] = useState<Set<number>>(new Set());
+
+  const loadStaticOverrides = () => {
+    try { setStaticOverrides(JSON.parse(localStorage.getItem('nutriwise-static-recipe-overrides') || '{}')); } catch { setStaticOverrides({}); }
+    try { setDeletedStaticIds(new Set(JSON.parse(localStorage.getItem('nutriwise-deleted-static-ids') || '[]'))); } catch { setDeletedStaticIds(new Set()); }
+  };
+
+  // Reload custom recipes from localStorage
+  const reloadCustom = () => {
+    try {
+      const raw: any[] = JSON.parse(localStorage.getItem('nutriwise-finder-recipes') || '[]');
+      const mapped: Recipe[] = raw.map((r, idx) => ({
+        id: 9000 + idx,
+        name: r.name || 'Untitled',
+        category: r.category || 'Main Course',
+        cost: Number(r.cost) || 0,
+        time: Number(r.time) || 30,
+        calories: Number(r.calories) || 300,
+        protein: Number(r.protein) || 10,
+        difficulty: r.difficulty || 'Easy',
+        ingredients: Array.isArray(r.ingredients) ? r.ingredients : [],
+        detailedSteps: Array.isArray(r.detailedSteps) ? r.detailedSteps : [],
+        tips: Array.isArray(r.tips) ? r.tips : [],
+        image: r.image || '',
+        videoLink: r.videoLink || '',
+        videoChannel: r.videoChannel || '',
+      }));
+      setCustomRecipes(mapped);
+    } catch { setCustomRecipes([]); }
+  };
+
+  const handleAdminDelete = (recipe: Recipe) => {
+    setAdminDeleteId(recipe.id);
+  };
+
+  const confirmAdminDelete = () => {
+    if (adminDeleteId === null) return;
+    if (adminDeleteId < 9000) {
+      // Static recipe: mark as deleted
+      const deleted: number[] = JSON.parse(localStorage.getItem('nutriwise-deleted-static-ids') || '[]');
+      if (!deleted.includes(adminDeleteId)) deleted.push(adminDeleteId);
+      localStorage.setItem('nutriwise-deleted-static-ids', JSON.stringify(deleted));
+      loadStaticOverrides();
+    } else {
+      // Custom recipe
+      const idx = adminDeleteId - 9000;
+      const raw: any[] = JSON.parse(localStorage.getItem('nutriwise-finder-recipes') || '[]');
+      raw.splice(idx, 1);
+      localStorage.setItem('nutriwise-finder-recipes', JSON.stringify(raw));
+      reloadCustom();
+    }
+    setAdminDeleteId(null);
+    notifyAdmin('Recipe deleted');
+  };
+
+  const handleAdminEdit = (recipe: Recipe) => {
+    setAdminEditRecipe({
+      ...recipe,
+      _isStatic: recipe.id < 9000,
+      _idx: recipe.id < 9000 ? recipe.id : recipe.id - 9000,
+      ingredientsText: Array.isArray(recipe.ingredients) ? recipe.ingredients.join('\n') : '',
+      stepsText: Array.isArray(recipe.detailedSteps) ? recipe.detailedSteps.join('\n') : '',
+      tipsText: Array.isArray(recipe.tips) ? recipe.tips.join('\n') : '',
+    });
+  };
+
+  const saveAdminEdit = () => {
+    if (!adminEditRecipe) return;
+    const ingr = adminEditRecipe.ingredientsText.split('\n').map((s: string) => s.trim()).filter(Boolean);
+    const steps = adminEditRecipe.stepsText.split('\n').map((s: string) => s.trim()).filter(Boolean);
+    const tips = adminEditRecipe.tipsText.split('\n').map((s: string) => s.trim()).filter(Boolean);
+    if (adminEditRecipe._isStatic) {
+      // Save override for built-in recipe
+      const overrides = JSON.parse(localStorage.getItem('nutriwise-static-recipe-overrides') || '{}');
+      overrides[adminEditRecipe._idx] = { ...adminEditRecipe, ingredients: ingr, detailedSteps: steps, tips };
+      localStorage.setItem('nutriwise-static-recipe-overrides', JSON.stringify(overrides));
+      loadStaticOverrides();
+    } else {
+      // Save custom recipe
+      const raw: any[] = JSON.parse(localStorage.getItem('nutriwise-finder-recipes') || '[]');
+      raw[adminEditRecipe._idx] = { ...adminEditRecipe, ingredients: ingr, detailedSteps: steps, tips };
+      localStorage.setItem('nutriwise-finder-recipes', JSON.stringify(raw));
+      reloadCustom();
+    }
+    setAdminEditRecipe(null);
+    notifyAdmin('Recipe updated!');
+  };
 
   useEffect(() => {
     const userData = localStorage.getItem('nutriwise-user');
@@ -44,34 +142,7 @@ export function RecipeFinderPage() {
 
   // Expanded recipe database with detailed instructions
   const recipes = [
-    {
-      id: 1,
-      name: 'Masala Dosa',
-      category: 'Breakfast',
-      cost: 30,
-      time: 30,
-      calories: 320,
-      protein: 8,
-      difficulty: 'Medium',
-      ingredients: ['Dosa Batter', 'Potatoes', 'Onions', 'Mustard Seeds', 'Curry Leaves', 'Turmeric', 'Oil'],
-      detailedSteps: [
-        'Boil 3-4 potatoes until soft, then peel and mash them coarsely',
-        'Heat 2 tbsp oil in a pan, add 1 tsp mustard seeds and let them splutter',
-        'Add curry leaves, chopped onions, and green chilies. Sauté until golden',
-        'Add 1/2 tsp turmeric powder, mashed potatoes, and salt. Mix well and cook for 5 minutes',
-        'Heat a non-stick tawa, pour a ladleful of dosa batter and spread in circular motion',
-        'Drizzle oil around edges, cook until crispy and golden brown',
-        'Place potato filling in the center, fold the dosa and serve hot with chutney and sambar'
-      ],
-      tips: [
-        'Batter should be thin and flowing for crispy dosas',
-        'Keep the tawa at medium heat for even cooking',
-        'Add a pinch of hing (asafoetida) to the filling for better digestion'
-      ],
-      image: 'https://images.unsplash.com/photo-1743517894265-c86ab035adef?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtYXNhbGElMjBkb3NhJTIwc291dGglMjBpbmRpYW58ZW58MXx8fHwxNzc1NDc4MTc3fDA&ixlib=rb-4.1.0&q=80&w=1080',
-      videoLink: 'https://www.youtube.com/watch?v=D6QLGsLyEv8',
-      videoChannel: 'Hebbars Kitchen',
-    },
+
     {
       id: 2,
       name: 'Poha (Flattened Rice)',
@@ -101,36 +172,7 @@ export function RecipeFinderPage() {
       videoLink: 'https://www.youtube.com/watch?v=XE9DhYiXJik',
       videoChannel: 'Hebbars Kitchen',
     },
-    {
-      id: 3,
-      name: 'Idli Sambar',
-      category: 'Breakfast',
-      cost: 25,
-      time: 20,
-      calories: 180,
-      protein: 8,
-      difficulty: 'Easy',
-      ingredients: ['Idli Batter', 'Toor Dal', 'Mixed Vegetables', 'Sambar Powder', 'Tamarind', 'Curry Leaves'],
-      detailedSteps: [
-        'Grease idli plates with oil',
-        'Pour idli batter into each mold (3/4th full)',
-        'Steam in idli steamer or pressure cooker (without weight) for 10-12 minutes',
-        'For sambar: Pressure cook 1/2 cup toor dal with turmeric until soft',
-        'In a pan, cook mixed vegetables (carrots, beans, drumstick) with sambar powder',
-        'Add tamarind extract and cooked dal',
-        'Prepare tempering with mustard seeds, curry leaves, and dried red chilies',
-        'Pour tempering over sambar and simmer for 5 minutes',
-        'Serve hot idlis with sambar and coconut chutney'
-      ],
-      tips: [
-        'Batter should be fermented well overnight for soft idlis',
-        'Add 1/4 tsp baking soda if batter hasn\'t fermented properly',
-        'Use drumsticks in sambar for authentic taste'
-      ],
-      image: 'https://images.unsplash.com/photo-1630383249896-424e482df921?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxpZGxpJTIwc2FtYmFyJTIwc291dGglMjBpbmRpYW4lMjBicmVha2Zhc3R8ZW58MXx8fHwxNzc1NDc4MTc3fDA&ixlib=rb-4.1.0&q=80&w=1080',
-      videoLink: 'https://www.youtube.com/watch?v=lW_P5zQ77_Q',
-      videoChannel: 'Hebbars Kitchen',
-    },
+
     {
       id: 4,
       name: 'Dal Tadka',
@@ -716,6 +758,419 @@ export function RecipeFinderPage() {
       videoLink: 'https://www.youtube.com/watch?v=qiG85lK-wUI',
       videoChannel: 'Tasty',
     },
+
+    // ── South Indian Recipes (Sweet) ────────────────────────────────────
+    {
+      id: 25,
+      name: 'Mango Payasam (South Indian Dessert)',
+      category: 'Snack',
+      cost: 40,
+      time: 30,
+      calories: 280,
+      protein: 6,
+      difficulty: 'Medium',
+      ingredients: ['Mango Pulp', 'Coconut Milk', 'Jaggery', 'Rice Flour', 'Ghee', 'Cardamom', 'Cashews', 'Raisins'],
+      detailedSteps: [
+        'In a pan, add 1 cup mango pulp and 2 tbsp jaggery. Cook until jaggery melts',
+        'Heat 2 tbsp ghee, add 3 tbsp rice flour and roast until golden (3-4 minutes)',
+        'Pour the mango-jaggery mixture into the roasted rice flour slowly',
+        'Add 1 cup coconut milk and 1/4 cup water. Mix well to avoid lumps',
+        'Cook on medium heat, stirring continuously for 8-10 minutes until thick',
+        'Add crushed cardamom seeds. Garnish with roasted cashews and raisins',
+        'Serve warm in bowls with coconut shavings on top'
+      ],
+      tips: ['Use ripe mangoes for better taste', 'Stir continuously to prevent lumps', 'Serve within 2 hours for best texture'],
+      image: 'https://images.unsplash.com/photo-1641122694341-5db67b0e6f61?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=5-q5Xr_XYHU',
+      videoChannel: 'Vismai Food',
+    },
+
+    {
+      id: 28,
+      name: 'Vada (South Indian Fritter)',
+      category: 'Breakfast',
+      cost: 25,
+      time: 30,
+      calories: 320,
+      protein: 9,
+      difficulty: 'Medium',
+      ingredients: ['Urad Dal', 'Onions', 'Green Chilies', 'Ginger', 'Curry Leaves', 'Black Pepper', 'Oil', 'Salt'],
+      detailedSteps: [
+        'Soak 1 cup urad dal (whole) for 4-5 hours. Drain completely',
+        'Grind soaked dal to a thick paste (should be thick, not like batter)',
+        'Add finely chopped onions, green chilies, ginger, curry leaves',
+        'Add crushed black pepper and salt. Mix well',
+        'The batter should hold shape when held in hand',
+        'Heat oil in a deep pan. Test heat with small batter ball',
+        'Form a ball with the batter, make a hole in the center (classic vada shape)',
+        'Carefully drop into hot oil. Fry until golden brown on all sides',
+        'Drain on paper towel. Serve hot with sambar'
+      ],
+      tips: ['Urad dal should be whole, not split', 'Batter consistency is crucial - practice makes perfect', 'Can be stored for 3-4 days in airtight container'],
+      image: 'https://images.unsplash.com/photo-1603133872878-684f208fb84b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=q_05_T5Mq7I',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 29,
+      name: 'Lemon Rice (South Indian)',
+      category: 'Main Course',
+      cost: 25,
+      time: 15,
+      calories: 240,
+      protein: 5,
+      difficulty: 'Very Easy',
+      ingredients: ['Cooked Rice', 'Lemon', 'Turmeric', 'Mustard Seeds', 'Curry Leaves', 'Peanuts', 'Chana Dal', 'Oil'],
+      detailedSteps: [
+        'Use day-old or cold cooked rice, preferably broken rice for authentic taste',
+        'Heat 2 tbsp oil in a pan, add 1 tsp mustard seeds until they splutter',
+        'Add 1/2 tsp chana dal and 2 tbsp peanuts, fry until golden',
+        'Add curry leaves, green chilies, and grated ginger',
+        'Add 1/4 tsp turmeric powder, mix well',
+        'Add cooked rice, break up any clumps',
+        'Add juice of 1-2 lemons, mix gently to combine',
+        'Add salt and a pinch of black pepper to taste',
+        'Garnish with coriander and cashews. Serve hot or at room temperature'
+      ],
+      tips: ['This is a great way to use leftover rice', 'Add carrots and peas for more nutrition', 'Perfect lunch box item - tastes good even next day'],
+      image: 'https://images.unsplash.com/photo-1633355808127-0cd6b14502f1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=L3kQLmYx1qo',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 30,
+      name: 'Tamarind Rice (South Indian)',
+      category: 'Main Course',
+      cost: 28,
+      time: 20,
+      calories: 260,
+      protein: 6,
+      difficulty: 'Easy',
+      ingredients: ['Cooked Rice', 'Tamarind Pulp', 'Jaggery', 'Mustard Seeds', 'Curry Leaves', 'Peanuts', 'Oil', 'Turmeric'],
+      detailedSteps: [
+        'Mix tamarind pulp (1/4 cup) with jaggery (2 tbsp) and water (1/4 cup)',
+        'Heat 2 tbsp oil in a pan, add mustard seeds until they splutter',
+        'Add chana dal, urad dal, and peanuts. Fry until golden',
+        'Add curry leaves and dried red chilies',
+        'Add turmeric powder and mix',
+        'Add cold cooked rice and break up clumps',
+        'Pour tamarind-jaggery mixture slowly while mixing',
+        'Mix until rice is evenly coated',
+        'Add salt to taste and garnish with coriander. Serve at room temperature'
+      ],
+      tips: ['Use cold rice for best results', 'Tamarind-jaggery balance should be sweet-sour', 'Great for meal prep - tastes good for 2-3 days'],
+      image: 'https://images.unsplash.com/photo-1646069476518-0cc8b8a0bbc6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=S2S-15Fw5Ks',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 31,
+      name: 'Mango Lassi (South Indian Smoothie)',
+      category: 'Snack',
+      cost: 20,
+      time: 5,
+      calories: 180,
+      protein: 6,
+      difficulty: 'Very Easy',
+      ingredients: ['Mango Pulp', 'Yogurt', 'Milk', 'Sugar', 'Cardamom', 'Ice Cubes'],
+      detailedSteps: [
+        'Cut 1 ripe mango into pieces. Remove the pit',
+        'Add 1 cup fresh yogurt to a blender',
+        'Add mango pieces',
+        'Add 1/2 cup cold milk',
+        'Add 2 tbsp sugar (or honey) to taste',
+        'Add a pinch of cardamom powder',
+        'Add 5-6 ice cubes',
+        'Blend on high speed for 30-40 seconds until smooth',
+        'Pour into glasses. Optionally garnish with cardamom or crushed pistachios'
+      ],
+      tips: ['Use ripe, sweet mangoes for best taste', 'Make it thicker by using more yogurt', 'Add a pinch of ginger for digestive benefits'],
+      image: 'https://images.unsplash.com/photo-1619542307293-9f98b9e2c8e2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=dJ8hZwTgv6A',
+      videoChannel: 'Vismai Food',
+    },
+    {
+      id: 32,
+      name: 'Coconut Salad (South Indian)',
+      category: 'Snack',
+      cost: 18,
+      time: 10,
+      calories: 200,
+      protein: 4,
+      difficulty: 'Very Easy',
+      ingredients: ['Fresh Coconut', 'Carrot', 'Cucumber', 'Lemon', 'Green Chili', 'Mustard Seeds', 'Oil', 'Salt'],
+      detailedSteps: [
+        'Grate 1 cup fresh coconut',
+        'Finely chop or julienne 1 carrot and 1/2 cucumber',
+        'Heat 1 tbsp oil, add 1/2 tsp mustard seeds until they splutter',
+        'Add 1 green chili (finely chopped) and curry leaves',
+        'Turn off heat and let it cool for a minute',
+        'Mix grated coconut and chopped vegetables in a bowl',
+        'Pour the tempering (seasoned oil) over them',
+        'Add juice of 1/2 lemon and salt to taste',
+        'Mix well and serve at room temperature'
+      ],
+      tips: ['Use freshly grated coconut for best taste', 'Can add roasted peanuts for crunch', 'Store in fridge for up to 1 day'],
+      image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=FPqYI7L8gYs',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 33,
+      name: 'Chana Masala (Spicy Chickpea Curry)',
+      category: 'Main Course',
+      cost: 32,
+      time: 25,
+      calories: 280,
+      protein: 14,
+      difficulty: 'Easy',
+      ingredients: ['Cooked Chickpeas', 'Onions', 'Tomatoes', 'Ginger-Garlic Paste', 'Chana Masala', 'Coriander', 'Cumin', 'Turmeric', 'Oil'],
+      detailedSteps: [
+        'Heat 2 tbsp oil in a pan. Add 1 tsp cumin seeds and let them crackle',
+        'Add finely chopped onions (1 large) and fry until golden',
+        'Add 1 tbsp ginger-garlic paste and fry for 1-2 minutes',
+        'Add 2 chopped tomatoes and cook until mushy (5 minutes)',
+        'Add 1/4 tsp turmeric, 1 tsp chana masala, 1/2 tsp red chili powder',
+        'Add cooked chickpeas (2 cups). Mix well',
+        'Add 1/2 cup water and simmer for 8-10 minutes',
+        'Finish with lemon juice and fresh coriander',
+        'Serve hot with bhature, paratha, or rice'
+      ],
+      tips: ['Use high-quality chana masala for authentic taste', 'Add ginger to aid digestion', 'Make in bulk and freeze for meal prep'],
+      image: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=yumTlLnzFt8',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 34,
+      name: 'Bhindi Do Pyaza (Hot Spicy Okra)',
+      category: 'Main Course',
+      cost: 30,
+      time: 20,
+      calories: 200,
+      protein: 5,
+      difficulty: 'Easy',
+      ingredients: ['Okra (Bhindi)', 'Onions', 'Green Chili', 'Ginger-Garlic Paste', 'Turmeric', 'Red Chili', 'Coriander Powder', 'Oil'],
+      detailedSteps: [
+        'Wash and completely dry 300g okra. Remove the ends',
+        'Cut into 2-inch pieces. Keep them separate to prevent sticking',
+        'Heat 3 tbsp oil in a pan on high heat',
+        'Add cumin seeds, let them crackle',
+        'Add ginger-garlic paste and green chilies. Fry for 1 minute',
+        'Add sliced onions (2 large), fry until they begin to brown',
+        'Add okra pieces and stir continuously on high heat for 2-3 minutes',
+        'Add 1/4 tsp turmeric, 1/2 tsp red chili powder, 1 tsp coriander powder',
+        'Continue cooking on medium-high heat for 10-12 minutes until crispy',
+        'Add a squeeze of lemon and salt. Garnish with coriander'
+      ],
+      tips: ['Dry okra completely before cutting', 'Cook on high heat and keep stirring for crispy texture', 'Do not add water - okra releases its own moisture'],
+      image: 'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=Hn0pKkJHVz4',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 36,
+      name: 'Pav Bhaji',
+      category: 'Snack',
+      cost: 40,
+      time: 30,
+      calories: 380,
+      protein: 10,
+      difficulty: 'Easy',
+      ingredients: ['Mixed Vegetables', 'Pav (Bread Rolls)', 'Butter', 'Pav Bhaji Masala', 'Tomatoes', 'Onions', 'Capsicum'],
+      detailedSteps: [
+        'Boil potatoes, peas, carrots and cauliflower until soft. Mash coarsely',
+        'Heat 2 tbsp butter in a pan, add chopped onions and fry until golden',
+        'Add ginger-garlic paste, cook 1 minute. Add finely chopped capsicum',
+        'Add 2 large pureed tomatoes, cook until oil separates',
+        'Add 2 tsp pav bhaji masala, 1/2 tsp red chili powder, salt',
+        'Add mashed vegetables, mix well. Add water to adjust consistency',
+        'Simmer 10 min, mashing continuously until thick and homogeneous',
+        'Toast pav on tawa with butter until golden. Serve with bhaji, raw onion and lemon'
+      ],
+      tips: ['More butter = more authentic taste', 'Mash thoroughly for smooth texture', 'Add food color for restaurant look'],
+      image: 'https://images.unsplash.com/photo-1606491956689-2ea866880c84?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=kl5rBMfv0HQ',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 37,
+      name: 'Rajma Chawal',
+      category: 'Main Course',
+      cost: 35,
+      time: 40,
+      calories: 420,
+      protein: 18,
+      difficulty: 'Medium',
+      ingredients: ['Rajma (Kidney Beans)', 'Rice', 'Onions', 'Tomatoes', 'Ginger-Garlic Paste', 'Rajma Masala', 'Cream'],
+      detailedSteps: [
+        'Soak rajma overnight. Pressure cook with salt for 5-6 whistles until soft',
+        'Cook 1.5 cups rice separately. Keep warm',
+        'Heat 2 tbsp oil, add cumin seeds. Add finely chopped onions, fry until golden brown',
+        'Add ginger-garlic paste, cook 2 minutes',
+        'Add 2 pureed tomatoes, cook until oil separates (8-10 min)',
+        'Add rajma masala, red chili powder, coriander powder, and salt',
+        'Add cooked rajma along with cooking water, simmer 15 min',
+        'Mash a few beans to thicken gravy. Finish with cream or butter',
+        'Serve hot over rice with raw onion and pickle'
+      ],
+      tips: ['Never skip soaking overnight', 'Slow cooking develops deeper flavor', 'Add amchur (dry mango) for tanginess'],
+      image: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=oDvjMSIsgbg',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 38,
+      name: 'Palak Paneer',
+      category: 'Main Course',
+      cost: 55,
+      time: 30,
+      calories: 340,
+      protein: 16,
+      difficulty: 'Medium',
+      ingredients: ['Spinach', 'Paneer', 'Onions', 'Tomatoes', 'Cream', 'Garam Masala', 'Garlic', 'Ginger'],
+      detailedSteps: [
+        'Blanch 400g spinach in boiling water for 2 min, then immediately into ice water',
+        'Blend spinach to smooth puree. Set aside',
+        'Heat 2 tbsp oil, fry 200g paneer cubes until golden. Set aside',
+        'In same pan, add onion paste, fry until light brown',
+        'Add ginger-garlic paste, cook 2 min. Add tomato puree, cook until thick',
+        'Add 1/2 tsp garam masala, cumin, coriander powder, and salt',
+        'Add spinach puree, mix well and simmer 5 min',
+        'Add fried paneer, stir gently. Finish with 2 tbsp cream',
+        'Serve with roti or naan'
+      ],
+      tips: ['Ice bath keeps spinach vibrantly green', 'Do not overcook after adding spinach', 'Use fresh paneer for best results'],
+      image: 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=SP45Bh8YBSM',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 39,
+      name: 'Chole Bhature',
+      category: 'Breakfast',
+      cost: 45,
+      time: 45,
+      calories: 480,
+      protein: 14,
+      difficulty: 'Medium',
+      ingredients: ['Chickpeas', 'Maida', 'Yogurt', 'Onions', 'Tomatoes', 'Chole Masala', 'Baking Soda', 'Oil'],
+      detailedSteps: [
+        'Soak chickpeas overnight. Pressure cook with tea bag (for color) and salt for 6-7 whistles',
+        'For bhatura: Mix 2 cups maida, 3 tbsp yogurt, 1/2 tsp baking soda, salt and oil. Knead soft dough. Rest 1 hr',
+        'For chole: Fry onions golden, add tomato puree, chole masala, cook until thick',
+        'Add cooked chickpeas with water. Simmer 15 min mashing some chickpeas for thick gravy',
+        'Roll bhatura dough into oval shapes',
+        'Deep fry in hot oil until puffed and golden',
+        'Serve hot chole with bhatura, sliced onion and green chutney'
+      ],
+      tips: ['Tea bag gives authentic dark color to chole', 'Fry bhatura on high heat for proper puffing', 'Best eaten fresh and hot'],
+      image: 'https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=x5EIFRH_bKE',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 40,
+      name: 'Kadai Paneer',
+      category: 'Main Course',
+      cost: 60,
+      time: 30,
+      calories: 360,
+      protein: 18,
+      difficulty: 'Medium',
+      ingredients: ['Paneer', 'Capsicum', 'Onions', 'Tomatoes', 'Kadai Masala', 'Kasuri Methi', 'Cream', 'Ginger'],
+      detailedSteps: [
+        'Dry roast and grind: 1 tbsp coriander seeds + 3 dried red chilies for kadai masala',
+        'Heat 2 tbsp oil in a kadai, add sliced onions and stir fry 2 min on high heat',
+        'Add julienned capsicum and stir fry 1 min keeping crunchy',
+        'Add tomato puree, cook until thick and oil separates',
+        'Add ground kadai masala, ginger julienne, salt',
+        'Add 250g paneer cubes, toss gently to coat',
+        'Add 2 tbsp cream, stir. Crush kasuri methi and add',
+        'Garnish with ginger strips and coriander. Serve with naan or roti'
+      ],
+      tips: ['High heat stir fry keeps veggies crunchy', 'Freshly ground masala is key to authentic flavor', 'Do not overcook paneer - it turns rubbery'],
+      image: 'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=9DiSM3TB3Qo',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 41,
+      name: 'Pani Puri',
+      category: 'Snack',
+      cost: 20,
+      time: 15,
+      calories: 180,
+      protein: 4,
+      difficulty: 'Easy',
+      ingredients: ['Puri (ready-made)', 'Boiled Potatoes', 'Chickpeas', 'Tamarind Chutney', 'Mint', 'Coriander', 'Jeera', 'Black Salt'],
+      detailedSteps: [
+        'For pani: Blend mint, coriander, green chili, jeera, black salt with cold water. Strain and chill',
+        'Mix boiled mashed potatoes with boiled chickpeas, chaat masala, and salt for filling',
+        'Make tamarind chutney: cook tamarind + jaggery + water until thick',
+        'Gently tap the top of each puri to make a small hole',
+        'Fill each puri with 1 tsp potato-chickpea mixture',
+        'Add a few drops of tamarind chutney',
+        'Dip filled puri into chilled mint pani and eat immediately',
+        'The key is to eat in one bite!'
+      ],
+      tips: ['Pani should be very cold for best taste', 'Ready-made puris from market are perfectly fine', 'Adjust spice level in pani to taste'],
+      image: 'https://images.unsplash.com/photo-1606491956689-2ea866880c84?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=xMg0bKGBxSM',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 42,
+      name: 'Dahi Vada',
+      category: 'Snack',
+      cost: 30,
+      time: 35,
+      calories: 250,
+      protein: 11,
+      difficulty: 'Medium',
+      ingredients: ['Urad Dal', 'Thick Curd', 'Tamarind Chutney', 'Green Chutney', 'Chaat Masala', 'Cumin Powder', 'Red Chili'],
+      detailedSteps: [
+        'Soak urad dal 4-5 hrs. Grind to thick fluffy batter. Add salt',
+        'Heat oil in deep pan. Drop spoonfuls of batter and fry until light golden',
+        'Soak fried vadas in warm water for 10 min, then gently squeeze out water',
+        'Beat 2 cups thick curd with sugar and salt until smooth',
+        'Arrange vadas in a plate, pour generous curd on top',
+        'Drizzle tamarind chutney and green mint chutney',
+        'Sprinkle roasted cumin powder, red chili powder, and chaat masala',
+        'Chill for 30 min. Garnish with coriander and pomegranate'
+      ],
+      tips: ['Soaking in warm water makes vadas soft and spongy', 'Beat curd well to avoid lumps', 'Serve chilled for best taste'],
+      image: 'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=xhqUYAY3Q5E',
+      videoChannel: 'Hebbars Kitchen',
+    },
+    {
+      id: 43,
+      name: 'Aloo Gobi',
+      category: 'Main Course',
+      cost: 28,
+      time: 25,
+      calories: 220,
+      protein: 6,
+      difficulty: 'Easy',
+      ingredients: ['Potatoes', 'Cauliflower', 'Onions', 'Tomatoes', 'Cumin Seeds', 'Turmeric', 'Coriander Powder', 'Garam Masala'],
+      detailedSteps: [
+        'Cut 2 medium potatoes into 1-inch cubes. Cut 1/2 cauliflower into florets',
+        'Heat 3 tbsp oil in a pan on high heat',
+        'Add 1 tsp cumin seeds, let crackle. Add chopped onions, fry until light brown',
+        'Add ginger-garlic paste, cook 1 min',
+        'Add 1/4 tsp turmeric, 1 tsp coriander powder, 1/2 tsp red chili powder',
+        'Add potato cubes, toss to coat. Cook 5 min on medium heat',
+        'Add cauliflower florets, mix well',
+        'Cover and cook on low heat 12-15 min until both are tender',
+        'Add 1/2 tsp garam masala, chopped tomatoes. Cook 3 more min uncovered',
+        'Garnish with coriander. Serve with roti'
+      ],
+      tips: ['Do not add water - dry sabzi is the authentic style', 'Cook on low heat for even cooking without burning', 'Add amchur for tanginess'],
+      image: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1080&q=80',
+      videoLink: 'https://www.youtube.com/watch?v=6dCBQmqJBF4',
+      videoChannel: 'Hebbars Kitchen',
+    },
   ];
 
   const categories = ['all', 'Breakfast', 'Main Course', 'Non-Veg', 'Snack'];
@@ -761,7 +1216,38 @@ export function RecipeFinderPage() {
     videoChannel: 'Online Recipe',
   });
 
-  const combinedRecipes = [...recipes, ...dynamicRecipes];
+  // Load custom recipes from admin-managed localStorage store
+  const loadCustomRecipes = () => {
+    try {
+      const raw: any[] = JSON.parse(localStorage.getItem('nutriwise-finder-recipes') || '[]');
+      const mapped: Recipe[] = raw.map((r, idx) => ({
+        id: 9000 + idx,
+        name: r.name || 'Untitled',
+        category: r.category || 'Main Course',
+        cost: Number(r.cost) || 0,
+        time: Number(r.time) || 30,
+        calories: Number(r.calories) || 300,
+        protein: Number(r.protein) || 10,
+        difficulty: r.difficulty || 'Easy',
+        ingredients: Array.isArray(r.ingredients) ? r.ingredients : [],
+        detailedSteps: Array.isArray(r.detailedSteps) ? r.detailedSteps : [],
+        tips: Array.isArray(r.tips) ? r.tips : [],
+        image: r.image || '',
+        videoLink: r.videoLink || '',
+        videoChannel: r.videoChannel || '',
+      }));
+      setCustomRecipes(mapped);
+    } catch {
+      setCustomRecipes([]);
+    }
+  };
+
+  // Apply admin overrides to static recipes and filter deleted ones
+  const effectiveStaticRecipes = recipes
+    .filter(r => !deletedStaticIds.has(r.id))
+    .map(r => staticOverrides[r.id] ? { ...r, ...staticOverrides[r.id] } : r);
+
+  const combinedRecipes = [...effectiveStaticRecipes, ...dynamicRecipes, ...customRecipes];
 
   const loadSavedRecipeKeys = async () => {
     const storageSaved = JSON.parse(localStorage.getItem('nutriwise-wishlist') || '[]') as string[];
@@ -813,6 +1299,16 @@ export function RecipeFinderPage() {
   useEffect(() => {
     loadDynamicRecipes();
     loadSavedRecipeKeys();
+    loadCustomRecipes();
+    loadStaticOverrides();
+
+    // Re-sync when admin changes data in another tab
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'nutriwise-finder-recipes') loadCustomRecipes();
+      if (e.key === 'nutriwise-static-recipe-overrides' || e.key === 'nutriwise-deleted-static-ids') loadStaticOverrides();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, [user]);
 
   const filteredRecipes = combinedRecipes.filter((recipe) => {
@@ -945,12 +1441,86 @@ export function RecipeFinderPage() {
           Found {filteredRecipes.length} recipe{filteredRecipes.length !== 1 ? 's' : ''}
         </div>
 
+        {/* Admin toast */}
+        {adminToast && (
+          <div className="fixed top-5 right-5 z-50 bg-indigo-600 text-white px-5 py-3 rounded-xl shadow-xl flex items-center gap-2 text-sm font-medium animate-fade-in">
+            <Save className="w-4 h-4" /> {adminToast}
+          </div>
+        )}
+
+        {/* Admin Delete Confirm Modal */}
+        {adminDeleteId !== null && (
+          <>
+            <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={() => setAdminDeleteId(null)} />
+            <div className="fixed top-1/2 left-1/2 z-50 bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full" style={{ transform: 'translate(-50%,-50%)' }}>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 bg-red-100 rounded-lg"><AlertCircle className="w-5 h-5 text-red-600" /></div>
+                <h3 className="text-lg font-bold text-gray-900">Delete Recipe?</h3>
+              </div>
+              <p className="text-gray-600 text-sm mb-6 ml-11">This will permanently remove the recipe from the Recipe Finder.</p>
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setAdminDeleteId(null)} className="px-4 py-2.5 rounded-lg border-2 border-gray-200 text-gray-600 font-medium text-sm hover:bg-gray-50">Cancel</button>
+                <button onClick={confirmAdminDelete} className="px-4 py-2.5 rounded-lg bg-gradient-to-r from-red-500 to-rose-600 text-white font-medium text-sm hover:shadow-lg">Delete</button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Admin Inline Edit Modal */}
+        {adminEditRecipe && (
+          <>
+            <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={() => setAdminEditRecipe(null)} />
+            <div className="fixed top-1/2 left-1/2 z-50 bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto" style={{ transform: 'translate(-50%,-50%)' }}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-gray-900">Edit Recipe</h3>
+                <button onClick={() => setAdminEditRecipe(null)} className="p-1 rounded-lg hover:bg-gray-100"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="space-y-3">
+                {[['name','Recipe Name'],['category','Category'],['difficulty','Difficulty'],['cost','Cost (₹)'],['time','Time (min)'],['calories','Calories'],['protein','Protein (g)'],['image','Image URL'],['videoLink','YouTube Link'],['videoChannel','Channel Name']].map(([key, label]) => (
+                  <div key={key}>
+                    <label className="text-xs font-semibold text-gray-500 mb-1 block">{label}</label>
+                    <input className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      value={(adminEditRecipe as any)[key] ?? ''}
+                      onChange={e => setAdminEditRecipe((p: any) => ({ ...p, [key]: e.target.value }))} />
+                  </div>
+                ))}
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 mb-1 block">Ingredients (one per line)</label>
+                  <textarea rows={4} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+                    value={adminEditRecipe.ingredientsText}
+                    onChange={e => setAdminEditRecipe((p: any) => ({ ...p, ingredientsText: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 mb-1 block">Steps (one per line)</label>
+                  <textarea rows={5} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+                    value={adminEditRecipe.stepsText}
+                    onChange={e => setAdminEditRecipe((p: any) => ({ ...p, stepsText: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 mb-1 block">Tips (one per line)</label>
+                  <textarea rows={3} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+                    value={adminEditRecipe.tipsText}
+                    onChange={e => setAdminEditRecipe((p: any) => ({ ...p, tipsText: e.target.value }))} />
+                </div>
+              </div>
+              <div className="flex gap-3 mt-5">
+                <button onClick={saveAdminEdit} className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl font-semibold text-sm hover:shadow-lg">
+                  <Save className="w-4 h-4" /> Save Changes
+                </button>
+                <button onClick={() => setAdminEditRecipe(null)} className="px-4 py-2.5 border-2 border-gray-200 text-gray-600 rounded-xl font-semibold text-sm hover:bg-gray-50">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
         {/* Recipe Cards */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredRecipes.map((recipe) => (
             <div
               key={recipe.id}
-              className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all cursor-pointer"
+              className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all cursor-pointer group relative"
               onClick={() => setSelectedRecipe(recipe)}
             >
               <div className="relative h-48">
@@ -976,8 +1546,34 @@ export function RecipeFinderPage() {
                     ₹{recipe.cost}
                   </div>
                 </div>
+
+                {/* Admin edit/delete overlay buttons */}
+                {isAdmin && (
+                  <div className="absolute top-3 left-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={e => { e.stopPropagation(); handleAdminEdit(recipe); }}
+                      className="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-lg hover:bg-indigo-700 transition-colors"
+                      title="Edit recipe (Admin)"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={e => { e.stopPropagation(); handleAdminDelete(recipe); }}
+                      className="w-9 h-9 rounded-full bg-red-600 text-white flex items-center justify-center shadow-lg hover:bg-red-700 transition-colors"
+                      title="Delete recipe (Admin)"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
                   <h3 className="text-white font-bold text-lg">{recipe.name}</h3>
+                  {isAdmin && (
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      recipe.id >= 9000 ? 'bg-indigo-500 text-white' : 'bg-white/20 text-white'
+                    }`}>{recipe.id >= 9000 ? 'Custom' : 'Built-in'}</span>
+                  )}
                 </div>
               </div>
 

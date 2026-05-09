@@ -155,16 +155,31 @@ export function ProfilePage() {
     );
   };
 
-  const NumField = ({ field, label, unit, placeholder, min, max }: { field: string; label: string; unit: string; placeholder: string; min?: number; max?: number }) => (
-    <div>
-      <label className="text-sm font-semibold text-gray-600 mb-1.5 block">{label}</label>
-      <div className="relative">
-        <input type="number" value={(formData as any)[field]} onChange={e => set(field, e.target.value)} placeholder={placeholder} min={min} max={max}
-          className="w-full py-3 px-4 pr-14 rounded-xl border-2 border-gray-200 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-100 transition-all text-gray-800 font-medium text-lg text-center" />
-        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">{unit}</span>
+  const NumField = ({ field, label, unit, placeholder, min, max }: { field: string; label: string; unit: string; placeholder: string; min?: number; max?: number }) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const val = e.target.value;
+      // Allow empty string or any numeric string during typing
+      if (val === '' || /^\d+$/.test(val)) {
+        set(field, val);
+      }
+    };
+    return (
+      <div>
+        <label className="text-sm font-semibold text-gray-600 mb-1.5 block">{label}</label>
+        <div className="relative">
+          <input 
+            type="text" 
+            inputMode="numeric"
+            value={(formData as any)[field]} 
+            onChange={handleChange}
+            placeholder={placeholder}
+            className="w-full py-3 px-4 pr-14 rounded-xl border-2 border-gray-200 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-100 transition-all text-gray-800 font-medium text-lg text-center" 
+          />
+          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">{unit}</span>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // ── Step Content ─────────────────────────────────────────────
   const renderContent = () => {

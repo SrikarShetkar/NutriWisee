@@ -217,6 +217,46 @@ function generateMealPlan(userProfile: typeof userProfile, foodDb: typeof foodDa
   return mealPlan;
 }
 
+// Alternative meal selector (for single-meal regeneration)
+function selectAlternativeMeal(
+  mealType: string,
+  currentName: string | undefined,
+  profile: { diseases: string[]; allergies: string[]; preferences: string[]; preferredTags: string[]; dislikedFoods: string[] },
+  foodDb: typeof foodDatabase
+) {
+  const filtered = foodDb.filter((food) => {
+    if (food.category !== mealType) return false;
+    if (food.name === currentName) return false;
+    const bad = food.avoid.some((t) =>
+      profile.diseases.includes(t) ||
+      profile.allergies.includes(t) ||
+      profile.preferences.includes(t)
+    );
+    return !bad && !profile.dislikedFoods.includes(food.name);
+  });
+  if (filtered.length === 0) return null;
+  const scored = filtered
+    .map((food) => ({
+      ...food,
+      score:
+        food.tags.filter((t) => profile.preferredTags.includes(t)).length * 30 +
+        (food.cost <= 25 ? 25 : food.cost <= 35 ? 15 : 0) +
+        (food.protein >= 15 ? 15 : food.protein >= 10 ? 8 : 0),
+    }))
+    .sort((a, b) => b.score - a.score);
+  return scored[0];
+}
+
+// Featured recipes shown on home dashboard
+const FEATURED_RECIPES = [
+  { id: 1, name: 'Masala Dosa', category: 'Breakfast', cost: 30, time: 30, calories: 320, image: 'https://images.unsplash.com/photo-1743517894265-c86ab035adef?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=600&q=80' },
+  { id: 2, name: 'Dal Tadka', category: 'Main Course', cost: 25, time: 25, calories: 200, image: 'https://images.unsplash.com/photo-1767114915989-c6ab3c8fc42e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=600&q=80' },
+  { id: 3, name: 'Idli Sambar', category: 'Breakfast', cost: 25, time: 20, calories: 180, image: 'https://images.unsplash.com/photo-1630383249896-424e482df921?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=600&q=80' },
+  { id: 4, name: 'Paneer Tikka', category: 'Main Course', cost: 60, time: 30, calories: 380, image: 'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=600&q=80' },
+  { id: 5, name: 'Chickpea Salad', category: 'Snack', cost: 20, time: 10, calories: 250, image: 'https://images.unsplash.com/photo-1688923130941-889a41f4439c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=600&q=80' },
+  { id: 6, name: 'Butter Chicken', category: 'Non-Veg', cost: 120, time: 45, calories: 480, image: 'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=600&q=80' },
+];
+
 export function Dashboard() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -361,17 +401,25 @@ export function Dashboard() {
   };
 
   const handleGenerateMealPlan = async () => {
-    if (!dashboardData?.userProfile) return;
+    const profileData = dashboardData?.userProfile ||
+      (() => { try { return JSON.parse(localStorage.getItem('nutriwise-profile') || '{}'); } catch { return {}; } })();
+
+    if (!profileData || Object.keys(profileData).length === 0) {
+      alert('Please complete your health profile first.');
+      navigate('/profile');
+      return;
+    }
 
     setIsGenerating(true);
     try {
+      await new Promise(r => setTimeout(r, 600)); // short animation delay
       const mealPlanUserProfile = {
-        diseases: dashboardData.userProfile.medicalConditions || [],
-        allergies: dashboardData.userProfile.allergies || [],
-        preferences: dashboardData.userProfile.dietaryPreference ? [dashboardData.userProfile.dietaryPreference] : [],
+        diseases: profileData.medicalConditions || [],
+        allergies: profileData.allergies || [],
+        preferences: profileData.dietaryPreference ? [profileData.dietaryPreference] : [],
         preferredTags: ['high-protein', 'low-cost'],
         dislikedFoods: [],
-        dailyBudget: dashboardData.userProfile.budgetPerWeek ? Math.round(dashboardData.userProfile.budgetPerWeek / 7) : 100,
+        dailyBudget: profileData.budgetPerWeek ? Math.round(profileData.budgetPerWeek / 7) : 100,
       };
       const newPlan = generateMealPlan(mealPlanUserProfile, foodDatabase);
       setMealPlan(newPlan);
@@ -383,15 +431,18 @@ export function Dashboard() {
   };
 
   const handleRegenerateSingleMeal = (mealType: string) => {
-    if (!dashboardData?.userProfile) return;
+    const profileData = dashboardData?.userProfile ||
+      (() => { try { return JSON.parse(localStorage.getItem('nutriwise-profile') || '{}'); } catch { return {}; } })();
+
+    if (!profileData || Object.keys(profileData).length === 0) return;
 
     const mealPlanUserProfile = {
-      diseases: dashboardData.userProfile.medicalConditions || [],
-      allergies: dashboardData.userProfile.allergies || [],
-      preferences: dashboardData.userProfile.dietaryPreference ? [dashboardData.userProfile.dietaryPreference] : [],
+      diseases: profileData.medicalConditions || [],
+      allergies: profileData.allergies || [],
+      preferences: profileData.dietaryPreference ? [profileData.dietaryPreference] : [],
       preferredTags: ['high-protein', 'low-cost'],
       dislikedFoods: [],
-      dailyBudget: dashboardData.userProfile.budgetPerWeek ? Math.round(dashboardData.userProfile.budgetPerWeek / 7) : 100,
+      dailyBudget: profileData.budgetPerWeek ? Math.round(profileData.budgetPerWeek / 7) : 100,
     };
 
     const currentName = mealPlan[mealType]?.name;
@@ -415,7 +466,7 @@ export function Dashboard() {
         },
       }));
     } else {
-      console.warn(`No alternative meal found for ${mealType}`);
+      alert(`No alternative found for ${mealType} — try changing your profile preferences.`);
     }
   };
 
@@ -767,7 +818,11 @@ export function Dashboard() {
                   onChange={(e) => setSelectedDate(e.target.value)}
                   className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 />
-                <button className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-all">
+                <button
+                  onClick={handleGenerateMealPlan}
+                  className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-all"
+                  title="Refresh meal plan"
+                >
                   <RefreshCw className="w-5 h-5" />
                 </button>
                 <button
@@ -979,6 +1034,48 @@ export function Dashboard() {
 
           </div>
         </div>
+
+        {/* ── Featured Recipes ── */}
+        <div className="mt-10">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="text-2xl font-bold">Featured Recipes</h2>
+              <p className="text-gray-500 text-sm mt-0.5">Explore our hand-picked South Indian & popular recipes</p>
+            </div>
+            <Link to="/recipes" className="flex items-center gap-1.5 text-green-600 font-semibold text-sm hover:underline">
+              View All <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {FEATURED_RECIPES.map((recipe) => (
+              <Link
+                key={recipe.id}
+                to="/recipes"
+                className="group bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-200"
+              >
+                <div className="relative h-32 overflow-hidden">
+                  <img
+                    src={recipe.image}
+                    alt={recipe.name}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = ''; }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                  <span className="absolute bottom-2 left-2 right-2 text-white text-xs font-bold leading-tight line-clamp-2">{recipe.name}</span>
+                </div>
+                <div className="px-3 py-2">
+                  <span className="inline-block text-xs bg-green-100 text-green-700 rounded-full px-2 py-0.5 font-medium mb-1">{recipe.category}</span>
+                  <div className="flex items-center justify-between text-xs text-gray-400">
+                    <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" /> {recipe.time}m</span>
+                    <span className="flex items-center gap-0.5"><Flame className="w-3 h-3" /> {recipe.calories}</span>
+                    <span className="flex items-center gap-0.5"><DollarSign className="w-3 h-3" /> ₹{recipe.cost}</span>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+
       </div>
     </div>
   );

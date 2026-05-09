@@ -513,7 +513,7 @@ export function ComparisonPage() {
               href="/recipes"
               className="px-8 py-4 border-2 border-white text-white rounded-xl hover:bg-white hover:text-green-600 transition-all font-semibold"
             >
-              Find Healthy Recipes
+              Find More Recipes
             </a>
           </div>
         </div>

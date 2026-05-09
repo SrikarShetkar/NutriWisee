@@ -4,6 +4,7 @@ import { Sun, Cloud, CloudRain, Snowflake, TrendingDown, Heart, Zap, Shield, Use
 export function SeasonalFoodsPage() {
   const [selectedSeason, setSelectedSeason] = useState('summer');
   const [userName, setUserName] = useState('');
+  const [customFoods, setCustomFoods] = useState<any[]>([]);
 
   useEffect(() => {
     // Get username from localStorage
@@ -12,6 +13,19 @@ export function SeasonalFoodsPage() {
       const user = JSON.parse(userData);
       setUserName(user.name || 'Friend');
     }
+    // Load admin-added custom seasonal foods
+    try {
+      const raw: any[] = JSON.parse(localStorage.getItem('nutriwise-seasonal-foods') || '[]');
+      setCustomFoods(raw);
+    } catch { setCustomFoods([]); }
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'nutriwise-seasonal-foods') {
+        try { setCustomFoods(JSON.parse(e.newValue || '[]')); } catch { setCustomFoods([]); }
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   const seasons = [
@@ -227,7 +241,23 @@ export function SeasonalFoodsPage() {
     },
   };
 
-  const currentSeason = seasonalFoods[selectedSeason as keyof typeof seasonalFoods];
+  const currentSeason = {
+    ...seasonalFoods[selectedSeason as keyof typeof seasonalFoods],
+    foods: [
+      ...seasonalFoods[selectedSeason as keyof typeof seasonalFoods].foods,
+      ...customFoods
+        .filter((f: any) => f.season === selectedSeason)
+        .map((f: any) => ({
+          name: f.name,
+          emoji: f.emoji || '🌱',
+          image: f.image || '',
+          benefits: Array.isArray(f.benefits) ? f.benefits : [],
+          cost: f.cost || '',
+          nutrition: { calories: Number(f.calories) || 0, protein: Number(f.protein) || 0, carbs: Number(f.carbs) || 0 },
+          savingPercent: Number(f.savingPercent) || 0,
+        })),
+    ],
+  };
   const currentSeasonInfo = seasons.find((s) => s.id === selectedSeason)!;
   const Icon = currentSeasonInfo.icon;
 
