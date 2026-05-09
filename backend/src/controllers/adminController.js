@@ -205,6 +205,153 @@ export const deleteRecipe = (req, res) => {
   });
 };
 
+// ─── Seasonal Foods Management ──────────────────────────────────
+
+export const getSeasonalFoods = (req, res) => {
+  db.all('SELECT * FROM seasonal_foods ORDER BY season DESC', [], (err, foods) => {
+    if (err) return res.status(500).json({ error: 'Database error' });
+    res.json({ foods: foods || [] });
+  });
+};
+
+export const createSeasonalFood = (req, res) => {
+  const { foodName, season, benefits, tips, image } = req.body;
+  if (!foodName || !season) return res.status(400).json({ error: 'Food name and season are required' });
+
+  db.run(
+    `INSERT INTO seasonal_foods (foodName, season, benefits, tips, image, createdAt)
+     VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+    [foodName, season, benefits || '', tips || '', image || ''],
+    function(err) {
+      if (err) return res.status(500).json({ error: 'Failed to create seasonal food' });
+      res.status(201).json({ message: 'Seasonal food created', id: this.lastID });
+    }
+  );
+};
+
+export const updateSeasonalFood = (req, res) => {
+  const { id } = req.params;
+  const { foodName, season, benefits, tips, image } = req.body;
+
+  db.run(
+    `UPDATE seasonal_foods SET foodName=?, season=?, benefits=?, tips=?, image=? WHERE id=?`,
+    [foodName, season, benefits, tips, image, id],
+    function(err) {
+      if (err) return res.status(500).json({ error: 'Failed to update seasonal food' });
+      if (this.changes === 0) return res.status(404).json({ error: 'Seasonal food not found' });
+      res.json({ message: 'Seasonal food updated' });
+    }
+  );
+};
+
+export const deleteSeasonalFood = (req, res) => {
+  const { id } = req.params;
+  db.run('DELETE FROM seasonal_foods WHERE id = ?', [id], function(err) {
+    if (err) return res.status(500).json({ error: 'Failed to delete seasonal food' });
+    if (this.changes === 0) return res.status(404).json({ error: 'Seasonal food not found' });
+    res.json({ message: 'Seasonal food deleted' });
+  });
+};
+
+// ─── Vitamin Sources Management ────────────────────────────────
+
+export const getVitaminSources = (req, res) => {
+  db.all('SELECT * FROM vitamin_sources ORDER BY vitaminName ASC', [], (err, sources) => {
+    if (err) return res.status(500).json({ error: 'Database error' });
+    res.json({ sources: sources || [] });
+  });
+};
+
+export const createVitaminSource = (req, res) => {
+  const { vitaminName, foods, benefits, deficiencySymptoms } = req.body;
+  if (!vitaminName || !foods) return res.status(400).json({ error: 'Vitamin name and foods are required' });
+
+  const foodList = Array.isArray(foods) ? JSON.stringify(foods) : foods;
+
+  db.run(
+    `INSERT INTO vitamin_sources (vitaminName, foods, benefits, deficiencySymptoms, createdAt)
+     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+    [vitaminName, foodList, benefits || '', deficiencySymptoms || ''],
+    function(err) {
+      if (err) return res.status(500).json({ error: 'Failed to create vitamin source' });
+      res.status(201).json({ message: 'Vitamin source created', id: this.lastID });
+    }
+  );
+};
+
+export const updateVitaminSource = (req, res) => {
+  const { id } = req.params;
+  const { vitaminName, foods, benefits, deficiencySymptoms } = req.body;
+  const foodList = Array.isArray(foods) ? JSON.stringify(foods) : foods;
+
+  db.run(
+    `UPDATE vitamin_sources SET vitaminName=?, foods=?, benefits=?, deficiencySymptoms=? WHERE id=?`,
+    [vitaminName, foodList, benefits, deficiencySymptoms, id],
+    function(err) {
+      if (err) return res.status(500).json({ error: 'Failed to update vitamin source' });
+      if (this.changes === 0) return res.status(404).json({ error: 'Vitamin source not found' });
+      res.json({ message: 'Vitamin source updated' });
+    }
+  );
+};
+
+export const deleteVitaminSource = (req, res) => {
+  const { id } = req.params;
+  db.run('DELETE FROM vitamin_sources WHERE id = ?', [id], function(err) {
+    if (err) return res.status(500).json({ error: 'Failed to delete vitamin source' });
+    if (this.changes === 0) return res.status(404).json({ error: 'Vitamin source not found' });
+    res.json({ message: 'Vitamin source deleted' });
+  });
+};
+
+// ─── Nutrition Tips Management ─────────────────────────────────
+
+export const getNutritionTips = (req, res) => {
+  db.all('SELECT * FROM nutrition_tips ORDER BY createdAt DESC', [], (err, tips) => {
+    if (err) return res.status(500).json({ error: 'Database error' });
+    res.json({ tips: tips || [] });
+  });
+};
+
+export const createNutritionTip = (req, res) => {
+  const { title, content, category, icon } = req.body;
+  if (!title || !content) return res.status(400).json({ error: 'Title and content are required' });
+
+  db.run(
+    `INSERT INTO nutrition_tips (title, content, category, icon, createdAt)
+     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+    [title, content, category || 'general', icon || '💡'],
+    function(err) {
+      if (err) return res.status(500).json({ error: 'Failed to create nutrition tip' });
+      res.status(201).json({ message: 'Nutrition tip created', id: this.lastID });
+    }
+  );
+};
+
+export const updateNutritionTip = (req, res) => {
+  const { id } = req.params;
+  const { title, content, category, icon } = req.body;
+
+  db.run(
+    `UPDATE nutrition_tips SET title=?, content=?, category=?, icon=? WHERE id=?`,
+    [title, content, category, icon, id],
+    function(err) {
+      if (err) return res.status(500).json({ error: 'Failed to update nutrition tip' });
+      if (this.changes === 0) return res.status(404).json({ error: 'Nutrition tip not found' });
+      res.json({ message: 'Nutrition tip updated' });
+    }
+  );
+};
+
+export const deleteNutritionTip = (req, res) => {
+  const { id } = req.params;
+  db.run('DELETE FROM nutrition_tips WHERE id = ?', [id], function(err) {
+    if (err) return res.status(500).json({ error: 'Failed to delete nutrition tip' });
+    if (this.changes === 0) return res.status(404).json({ error: 'Nutrition tip not found' });
+    res.json({ message: 'Nutrition tip deleted' });
+  });
+};
+
 // ─── Real Stats ─────────────────────────────────────────────────
 export const getAdminStats = (req, res) => {
   db.get('SELECT COUNT(*) AS totalUsers FROM users', [], (err, u) => {
@@ -236,5 +383,17 @@ export default {
   createRecipe,
   updateRecipe,
   deleteRecipe,
+  getSeasonalFoods,
+  createSeasonalFood,
+  updateSeasonalFood,
+  deleteSeasonalFood,
+  getVitaminSources,
+  createVitaminSource,
+  updateVitaminSource,
+  deleteVitaminSource,
+  getNutritionTips,
+  createNutritionTip,
+  updateNutritionTip,
+  deleteNutritionTip,
   getAdminStats,
-};
+};

@@ -29,7 +29,24 @@ const itemVariants = {
 export const Hero: React.FC = () => {
   return (
     <div className="relative min-h-screen pt-20 pb-32 px-4 sm:px-6 lg:px-8 flex items-center justify-center overflow-hidden">
-      <div className="max-w-6xl mx-auto w-full">
+      {/* Animated background elements */}
+      <motion.div
+        className="absolute top-0 -left-32 w-72 h-72 bg-green-300 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"
+        animate={{ y: [0, 100, 0], x: [0, 50, 0] }}
+        transition={{ duration: 8, repeat: Infinity }}
+      />
+      <motion.div
+        className="absolute -bottom-32 right-10 w-72 h-72 bg-emerald-300 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"
+        animate={{ y: [0, -100, 0], x: [0, -50, 0] }}
+        transition={{ duration: 8, repeat: Infinity, delay: 2 }}
+      />
+      <motion.div
+        className="absolute top-1/2 left-1/3 w-56 h-56 bg-green-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"
+        animate={{ y: [0, 50, 0], x: [0, -100, 0] }}
+        transition={{ duration: 8, repeat: Infinity, delay: 4 }}
+      />
+
+      <div className="max-w-6xl mx-auto w-full relative z-10">
         <motion.div
           className="text-center"
           variants={containerVariants}
